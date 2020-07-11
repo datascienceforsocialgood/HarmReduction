@@ -1,0 +1,17 @@
+Substance,Type,Total
+MDMA,Belief,286
+MDA,Belief,41
+Ketamine,Belief,130
+Cocaine,Belief,145
+Methamphetamine,Belief,3
+LSD,Belief,38
+Other,Belief,26
+Unknown,Belief,67
+MDMA,Actual,254
+MDA,Actual,32
+Ketamine,Actual,122
+Cocaine,Actual,135
+Methamphetamine,Actual,2
+LSD,Actual,28
+Other,Actual,19
+Unknown,Actual,1
