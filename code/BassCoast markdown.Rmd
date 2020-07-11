@@ -1,0 +1,1179 @@
+---
+title: "Bass Coast"
+author: "Akash Dhatavkar"
+date: "14/05/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+##----- Installing required packages -----##
+if(!require(ggplot2)){install.packages("ggplot2")};require(ggplot2)
+if(!require(dplyr)){install.packages("dplyr")};require(dplyr)
+if(!require(tidyverse)){install.packages("tidyverse")};require(tidyverse)
+if(!require(scales)){install.packages("scales")};require(scales)
+if(!require(cluster)){install.packages("cluster")};require(cluster)
+if(!require(randomForest)){install.packages("randomForest")};require(randomForest)
+if(!require(DescTools)){install.packages("DescTools")};require(DescTools)
+if(!require(mclust)){install.packages("mclust")};require(mclust)
+if(!require(arules)){install.packages("arules")};require(arules)
+if(!require(networkD3)){install.packages("networkD3")};require(networkD3)
+```
+
+
+```{r}
+##----- Reading the Data -----##
+library (readr)
+
+bass = "https://raw.githubusercontent.com/datascienceforsocialgood/HarmReduction/master/BassCoast_Clean.csv"
+bass <- read_csv(url(bass))
+
+
+```
+
+```{r}
+##----- Checking Data -----##
+str(bass)
+bass$DateSurvey <- as.Date(bass$DateSurvey, format = "%Y-%m-%d") ## Making Date into Date Format
+class(bass$DateSurvey)
+sum(is.na(bass$Female))
+```
+
+
+```{r}
+##----- Making Yes-No columns to 0-1 Binary -----##
+bass$Female <- ifelse(bass$Female == "Yes", 0, 1)
+bass$Male <- ifelse(bass$Male == "Yes", 0, 1)
+bass$Nonbinary <- ifelse(bass$Nonbinary == "Yes", 0, 1)
+bass$Trans <- ifelse(bass$Trans == "Yes", 0, 1)
+bass$Gender_Unknown <- ifelse(bass$Gender_Unknown == "Yes", 0, 1)
+bass$Belief_MDMA_a <- ifelse(bass$Belief_MDMA_a == "Yes", 0, 1)
+bass$Belief_MDA_a <- ifelse(bass$Belief_MDA_a == "Yes", 0, 1)
+bass$Belief_Ketamine_a <- ifelse(bass$Belief_Ketamine_a == "Yes", 0, 1)
+bass$Belief_Cocaine_a <- ifelse(bass$Belief_Cocaine_a == "Yes", 0, 1)
+bass$Belief_Methamphetamine_a <- ifelse(bass$Belief_Methamphetamine_a == "Yes", 0, 1)
+bass$Belief_LSD_a <- ifelse(bass$Belief_LSD_a == "Yes", 0, 1)
+bass$Belief_Unknown_a <- ifelse(bass$Belief_Unknown_a == "Yes", 0, 1)
+bass$Belief_Other_a <- ifelse(bass$Belief_Other_a == "Yes", 0, 1)
+bass$Type_Powder_s1 <- ifelse(bass$Type_Powder_s1 == "Yes", 0, 1)
+bass$Type_Crystal_s1 <- ifelse(bass$Type_Crystal_s1 == "Yes", 0, 1)
+bass$Type_Blotter_s1 <- ifelse(bass$Type_Blotter_s1 == "Yes", 0, 1)
+bass$Type_PressTab_s1 <- ifelse(bass$Type_PressTab_s1 == "Yes", 0, 1)
+bass$Type_Liquid_s1 <- ifelse(bass$Type_Liquid_s1 == "Yes", 0, 1)
+bass$Type_Gummy_s1 <- ifelse(bass$Type_Gummy_s1 == "Yes", 0, 1)
+bass$Type_Other_s1 <- ifelse(bass$Type_Other_s1 == "Yes", 0, 1)
+bass$Testing_Self <- ifelse(bass$Testing_Self == "Yes", 0, 1)
+bass$Testing_Friends <- ifelse(bass$Testing_Friends == "Yes", 0, 1)
+bass$Testing_Clients <- ifelse(bass$Testing_Clients == "Yes", 0, 1)
+bass$Testing_Other <- ifelse(bass$Testing_Other == "Yes", 0, 1)
+bass$Testing_Other <- ifelse(bass$Testing_Other == "Yes", 0, 1)
+bass$Intention_Nochange_a <- ifelse(bass$Intention_Nochange_a == "Yes", 0, 1)
+bass$Intention_More_a <- ifelse(bass$Intention_More_a == "Yes", 0, 1)
+bass$Intention_Less_a <- ifelse(bass$Intention_Less_a == "Yes", 0, 1)
+bass$Intention_Dispose_a <- ifelse(bass$Intention_Dispose_a == "Yes", 0, 1)
+bass$Intention_Friend_a <- ifelse(bass$Intention_Friend_a == "Yes", 0, 1)
+bass$Intention_Change_a <- ifelse(bass$Intention_Change_a == "Yes", 0, 1)
+bass$Intention_Naloxone_a <- ifelse(bass$Intention_Naloxone_a == "Yes", 0, 1)
+bass$Intention_Other_a <- ifelse(bass$Intention_Other_a == "Yes", 0, 1)
+```
+
+```{r}
+##----- Checking dupicalte Unique codes -----##
+which(duplicated(bass$UniqueCode) | duplicated(bass$UniqueCode[nrow(bass):1 ])[nrow(bass):1])
+## Only Row 58 and 59 are exactly identical. All other rows from above have the same unique code,
+## however some values are different, so they should be different records
+
+##----- Removing the 1 duplicated row -----##
+bass <- bass[!row.names(bass) == 59,]
+
+##----- Checking Missing value counts -----##
+sapply(bass, function(x){(sum(is.na(x)) / length(x)) * 100})
+```
+
+```{r}
+##----- Creating actual results column to be inline with expectation -----##
+bass$FTIR_result_MDMA_a1 <- NA
+bass$FTIR_result_MDA_a1 <- NA
+bass$FTIR_result_Ketamine_a1 <- NA
+bass$FTIR_result_Cocaine_a1 <- NA
+bass$FTIR_result_Methamphetamine_a1 <- NA
+bass$FTIR_result_LSD_a1 <- NA
+bass$FTIR_result_Unknown_a1 <- NA
+bass$FTIR_result_Other_a1 <- NA
+```
+
+```{r}
+##---- Creating binary values from the FTIR actual results -----##
+bass$FTIR_result_MDMA_a1 <- ifelse(bass$FTIR_result_a1 == 1, 0, 1)
+bass$FTIR_result_MDA_a1 <- ifelse(bass$FTIR_result_a1 == 2, 0, 1)
+bass$FTIR_result_Ketamine_a1 <- ifelse(bass$FTIR_result_a1 == 3, 0, 1)
+bass$FTIR_result_Cocaine_a1 <- ifelse(bass$FTIR_result_a1 == 4, 0, 1)
+bass$FTIR_result_Methamphetamine_a1 <- ifelse(bass$FTIR_result_a1 == 5, 0, 1)
+bass$FTIR_result_LSD_a1 <- ifelse(bass$LSD_result == 0, 0, 1)
+bass$FTIR_result_Unknown_a1 <- ifelse(bass$FTIR_result_a1 == 8, 0, 1)
+bass$FTIR_result_Other_a1 <- ifelse(bass$FTIR_result_a1 == 7, 0, 1)
+
+bass$FTIR_result_MDMA_a1 <- ifelse(bass$FTIR_result_a2 == 1 & bass$FTIR_result_MDMA_a1 == 1 
+                                   & !is.na(bass$FTIR_result_a2), 0, bass$FTIR_result_MDMA_a1)
+
+bass$FTIR_result_MDA_a1 <- ifelse(bass$FTIR_result_a2 == 2 & bass$FTIR_result_MDA_a1 == 1 
+                                  & !is.na(bass$FTIR_result_a2), 0, bass$FTIR_result_MDA_a1)
+
+bass$FTIR_result_Ketamine_a1 <- ifelse(bass$FTIR_result_a2 == 3 & bass$FTIR_result_Ketamine_a1 == 1 
+                                       & !is.na(bass$FTIR_result_a2), 0, bass$FTIR_result_Ketamine_a1)
+
+bass$FTIR_result_Cocaine_a1 <- ifelse(bass$FTIR_result_a2 == 4 & bass$FTIR_result_Cocaine_a1 == 1 
+                                      & !is.na(bass$FTIR_result_a2), 0, bass$FTIR_result_Cocaine_a1)
+
+bass$FTIR_result_Methamphetamine_a1 <- ifelse(bass$FTIR_result_a2 == 5 & bass$FTIR_result_Methamphetamine_a1 == 1 
+                                      & !is.na(bass$FTIR_result_a2), 0, bass$FTIR_result_Methamphetamine_a1)
+
+bass$FTIR_result_Unknown_a1 <- ifelse(bass$FTIR_result_a2 == 8 & bass$FTIR_result_Unknown_a1 == 1 
+                                  & !is.na(bass$FTIR_result_a2), 0, bass$FTIR_result_Unknown_a1)
+
+bass$FTIR_result_Other_a1 <- ifelse(bass$FTIR_result_a2 == 7 & bass$FTIR_result_Other_a1 == 1 
+                                      & !is.na(bass$FTIR_result_a2), 0, bass$FTIR_result_Other_a1)
+
+
+
+bass$FTIR_result_MDMA_a1 <- ifelse(bass$FTIR_result_a3 == 1 & bass$FTIR_result_MDMA_a1 == 1 
+                                   & !is.na(bass$FTIR_result_a3), 0, bass$FTIR_result_MDMA_a1)
+
+bass$FTIR_result_MDA_a1 <- ifelse(bass$FTIR_result_a3 == 2 & bass$FTIR_result_MDA_a1 == 1 
+                                  & !is.na(bass$FTIR_result_a3), 0, bass$FTIR_result_MDA_a1)
+
+bass$FTIR_result_Ketamine_a1 <- ifelse(bass$FTIR_result_a3 == 3 & bass$FTIR_result_Ketamine_a1 == 1 
+                                       & !is.na(bass$FTIR_result_a3), 0, bass$FTIR_result_Ketamine_a1)
+
+bass$FTIR_result_Cocaine_a1 <- ifelse(bass$FTIR_result_a3 == 4 & bass$FTIR_result_Cocaine_a1 == 1 
+                                      & !is.na(bass$FTIR_result_a3), 0, bass$FTIR_result_Cocaine_a1)
+
+bass$FTIR_result_Methamphetamine_a1 <- ifelse(bass$FTIR_result_a3 == 5 & bass$FTIR_result_Methamphetamine_a1 == 1 
+                                              & !is.na(bass$FTIR_result_a3), 0, bass$FTIR_result_Methamphetamine_a1)
+
+bass$FTIR_result_Unknown_a1 <- ifelse(bass$FTIR_result_a3 == 8 & bass$FTIR_result_Unknown_a1 == 1 
+                                      & !is.na(bass$FTIR_result_a3), 0, bass$FTIR_result_Unknown_a1)
+
+bass$FTIR_result_Other_a1 <- ifelse(bass$FTIR_result_a3 == 7 & bass$FTIR_result_Other_a1 == 1 
+                                    & !is.na(bass$FTIR_result_a3), 0, bass$FTIR_result_Other_a1)
+
+bass$FTIR_result_MDMA_a1 <- ifelse(bass$FTIR_result_a4 == 1 & bass$FTIR_result_MDMA_a1 == 1 
+                                   & !is.na(bass$FTIR_result_a4), 0, bass$FTIR_result_MDMA_a1)
+
+bass$FTIR_result_MDA_a1 <- ifelse(bass$FTIR_result_a4 == 2 & bass$FTIR_result_MDA_a1 == 1 
+                                  & !is.na(bass$FTIR_result_a4), 0, bass$FTIR_result_MDA_a1)
+
+bass$FTIR_result_Ketamine_a1 <- ifelse(bass$FTIR_result_a4 == 3 & bass$FTIR_result_Ketamine_a1 == 1 
+                                       & !is.na(bass$FTIR_result_a4), 0, bass$FTIR_result_Ketamine_a1)
+
+bass$FTIR_result_Cocaine_a1 <- ifelse(bass$FTIR_result_a4 == 4 & bass$FTIR_result_Cocaine_a1 == 1 
+                                      & !is.na(bass$FTIR_result_a4), 0, bass$FTIR_result_Cocaine_a1)
+
+bass$FTIR_result_Methamphetamine_a1 <- ifelse(bass$FTIR_result_a4 == 5 & bass$FTIR_result_Methamphetamine_a1 == 1 
+                                              & !is.na(bass$FTIR_result_a4), 0, bass$FTIR_result_Methamphetamine_a1)
+
+bass$FTIR_result_Unknown_a1 <- ifelse(bass$FTIR_result_a4 == 8 & bass$FTIR_result_Unknown_a1 == 1 
+                                      & !is.na(bass$FTIR_result_a4), 0, bass$FTIR_result_Unknown_a1)
+
+bass$FTIR_result_Other_a1 <- ifelse(bass$FTIR_result_a4 == 7 & bass$FTIR_result_Other_a1 == 1 
+                                    & !is.na(bass$FTIR_result_a4), 0, bass$FTIR_result_Other_a1)
+
+
+##----- Replacing NA with 1, since 1 means 0 -----##
+bass[c("FTIR_result_MDMA_a1", "FTIR_result_MDA_a1",
+     "FTIR_result_Ketamine_a1", "FTIR_result_Cocaine_a1", "FTIR_result_Methamphetamine_a1",
+     "FTIR_result_LSD_a1", "FTIR_result_Unknown_a1", "FTIR_result_Other_a1")][is.na(bass[c("FTIR_result_MDMA_a1", "FTIR_result_MDA_a1",
+                                                                                           "FTIR_result_Ketamine_a1", "FTIR_result_Cocaine_a1", "FTIR_result_Methamphetamine_a1",
+                                                                                           "FTIR_result_LSD_a1", "FTIR_result_Unknown_a1", "FTIR_result_Other_a1")])] <- 1
+
+
+bass$match <- ifelse(bass$Belief_MDMA_a == bass$FTIR_result_MDMA_a1 & bass$Belief_MDA_a == bass$FTIR_result_MDA_a1 & 
+                       bass$Belief_Ketamine_a == bass$FTIR_result_Ketamine_a1 & 
+                       bass$Belief_Cocaine_a == bass$FTIR_result_Cocaine_a1 & 
+                       bass$Belief_Methamphetamine_a == bass$FTIR_result_Methamphetamine_a1 & 
+                       bass$Belief_LSD_a == bass$FTIR_result_LSD_a1 & bass$Belief_Unknown_a == bass$FTIR_result_Unknown_a1 &
+                       bass$Belief_Other_a == bass$FTIR_result_Other_a1, "Match", "No Match")
+
+sum(bass$match == "Match") / nrow(bass) ## 62%% of Matches
+
+```
+
+```{r}
+##----- Viz -----##
+bass$Gender <- ifelse(bass$Female == 0, "Female", 
+                      ifelse(bass$Male == 0, "Male",
+                             ifelse(bass$Nonbinary == 0, "Nonbinary",
+                                    ifelse(bass$Trans == 0, "Trans", "Unknown"))))
+
+##----- Check if any gender is better or worse in their expection vs actual -----##
+ggplot(bass, aes(x = factor(Gender), fill = match)) + geom_bar() + xlab("Gender") + ylab("")
+```
+
+```{r}
+##----- Check if any Gender has a preference to a specific substance -----##
+ggplot(bass, aes(x = factor(Gender), y = FTIR_result_MDMA_a1, fill = Gender)) + geom_bar(stat = "identity") + xlab("Gender") + ylab("MDMA Count")
+ggplot(bass, aes(x = factor(Gender), y = FTIR_result_MDA_a1, fill = Gender)) + geom_bar(stat = "identity") + xlab("Gender") + ylab("MDA Count")
+ggplot(bass, aes(x = factor(Gender), y = FTIR_result_Ketamine_a1, fill = Gender)) + geom_bar(stat = "identity") + xlab("Gender") + ylab("Ketamine Count")
+ggplot(bass, aes(x = factor(Gender), y = FTIR_result_Cocaine_a1, fill = Gender)) + geom_bar(stat = "identity") + xlab("Gender") + ylab("Cocaine Count")
+ggplot(bass, aes(x = factor(Gender), y = FTIR_result_Methamphetamine_a1, fill = Gender)) + geom_bar(stat = "identity") + xlab("Gender") + ylab("Methamphetamine Count")
+ggplot(bass, aes(x = factor(Gender), y = FTIR_result_LSD_a1, fill = Gender)) + geom_bar(stat = "identity") + xlab("Gender") + ylab("LSD Count")
+ggplot(bass, aes(x = factor(Gender), y = FTIR_result_Other_a1, fill = Gender)) + geom_bar(stat = "identity") + xlab("Gender") + ylab("Other Count")
+ggplot(bass, aes(x = factor(Gender), y = FTIR_result_Unknown_a1, fill = Gender)) + geom_bar(stat = "identity") + xlab("Gender") + ylab("Unknown Count")
+
+```
+
+```{r}
+##----- Check if any specific substance leads to more or less mismatches -----##
+ggplot(bass, aes(x = factor(match), y = 1 - FTIR_result_MDMA_a1, fill = match)) + geom_bar(stat = "identity") + xlab("Expected vs Belief") + ylab("Count") + ggtitle("MDMA")
+ggplot(bass, aes(x = factor(match), y = (1 - FTIR_result_MDMA_a1) / nrow(bass), fill = match)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("Expected vs Belief") + ylab("Percentage") + ggtitle("MDMA")
+
+ggplot(bass, aes(x = factor(match), y = 1 - FTIR_result_MDA_a1, fill = match)) + geom_bar(stat = "identity") + xlab("Expected vs Belief") + ylab("Count") + ggtitle("MDA")
+ggplot(bass, aes(x = factor(match), y = (1 - FTIR_result_MDA_a1)/nrow(bass), fill = match)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("Expected vs Belief") + ylab("Percentage") + ggtitle("MDA")
+
+ggplot(bass, aes(x = factor(match), y = 1 - FTIR_result_Ketamine_a1, fill = match)) + geom_bar(stat = "identity") + xlab("Expected vs Belief") + ylab("Count") + ggtitle("Ketamine")
+ggplot(bass, aes(x = factor(match), y = (1 - FTIR_result_Ketamine_a1) / nrow(bass), fill = match)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("Expected vs Belief") + ylab("Percentage") + ggtitle("Ketamine")
+
+ggplot(bass, aes(x = factor(match), y = 1 - FTIR_result_Cocaine_a1, fill = match)) + geom_bar(stat = "identity") + xlab("Expected vs Belief") + ylab("Count") + ggtitle("Cocaine")
+ggplot(bass, aes(x = factor(match), y = (1 - FTIR_result_Cocaine_a1) / nrow(bass), fill = match)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("Expected vs Belief") + ylab("Percentage") + ggtitle("Cocaine")
+
+ggplot(bass, aes(x = factor(match), y = 1 - FTIR_result_Methamphetamine_a1, fill = match)) + geom_bar(stat = "identity") + xlab("Expected vs Belief") + ylab("Count") + ggtitle("Methamphetamine")
+ggplot(bass, aes(x = factor(match), y = (1 - FTIR_result_Methamphetamine_a1) / nrow(bass), fill = match)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("Expected vs Belief") + ylab("Percentage") + ggtitle("Methamphetamine")
+
+ggplot(bass, aes(x = factor(match), y = 1 - FTIR_result_LSD_a1, fill = match)) + geom_bar(stat = "identity") + xlab("Expected vs Belief") + ylab("Count") + ggtitle("LSD")
+ggplot(bass, aes(x = factor(match), y = (1 - FTIR_result_LSD_a1) / nrow(bass), fill = match)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("Expected vs Belief") + ylab("Percentage") + ggtitle("LSD")
+
+ggplot(bass, aes(x = factor(match), y = 1 - FTIR_result_Other_a1, fill = match)) + geom_bar(stat = "identity") + xlab("Expected vs Belief") + ylab("Count") + ggtitle("Other") 
+ggplot(bass, aes(x = factor(match), y = (1 - FTIR_result_Other_a1) / nrow(bass), fill = match)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("Expected vs Belief") + ylab("Percentage") + ggtitle("Other")
+## Most users were not able to identify that the substance was of the "Other" category
+
+ggplot(bass, aes(x = factor(match), y = 1 - FTIR_result_Unknown_a1, fill = match)) + geom_bar(stat = "identity") + xlab("Expected vs Belief") + ylab("Count") + ggtitle("Unknown")
+ggplot(bass, aes(x = factor(match), y = (1 - FTIR_result_Unknown_a1) / nrow(bass), fill = match)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("Expected vs Belief") + ylab("Percentage") + ggtitle("Unknown")
+
+```
+
+```{r}
+##----- How many SUs have used drug checking  services before? -----##
+ggplot(bass[!is.na(bass$PreviousDC),], aes(x = factor(PreviousDC, labels = c("Yes", "No")), fill = PreviousDC)) + geom_bar(stat = "count") + xlab("") + ylab("Count") + ggtitle("Previously Used Drug Checking Service") + theme(legend.position = "none")
+
+ggplot(bass[!is.na(bass$PreviousDC),], aes(x = factor(PreviousDC, labels = c("Yes", "No")), fill = PreviousDC)) + geom_bar(aes(y = (..count..)/sum(..count..))) + scale_y_continuous(labels=percent) + xlab("") + ylab("Percentage") + ggtitle("Previously Used Drug Checking Service") + theme(legend.position = "none")
+```
+
+
+```{r}
+#----- What proportion of Service users consent to research? -----##
+ggplot(bass[!is.na(bass$Consent),], aes(x = factor(Consent, labels = c("Yes", "No")), fill = Consent)) + geom_bar(stat = "count") + xlab("") + ylab("Count") + ggtitle("Consent to Research") + theme(legend.position = "none")
+ggplot(bass[!is.na(bass$Consent),], aes(x = factor(Consent, labels = c("Yes", "No")), fill = Consent)) + geom_bar(aes(y = (..count..)/sum(..count..))) + scale_y_continuous(labels=percent) + xlab("") + ylab("Percentage") + ggtitle("Consent to Research") + theme(legend.position = "none")
+
+## Although there is one SU who has not consented, it appears that all the data that has been collected has been collected only if the SU's agreed to have their information collected, so this one is a potential Data Entry Error
+```
+
+
+```{r}
+##----- What Gender do the SU's identify with -----##
+ggplot(bass, aes(x = factor(Gender), fill = Gender)) + geom_bar(stat = "count") + xlab("Gender") + ylab("Count") + theme(legend.position = "none")
+
+ggplot(bass, aes(x = factor(Gender), fill = Gender)) + geom_bar(aes(y = (..count..)/sum(..count..))) + scale_y_continuous(labels=percent) + xlab("Gender") + ylab("Percentage") + theme(legend.position = "none")
+
+```
+
+
+```{r}
+##----- Where have they obtained their substances -----##
+bass$Obtained <- ifelse(bass$Obtained == 0, "Onsite",
+                        ifelse(bass$Obtained == 1, "Offsite",
+                               ifelse(bass$Obtained == 2, "Online",
+                                      ifelse(bass$Obtained == 3, "Ground",
+                                             ifelse(bass$Obtained == 4, "Medical",
+                                                    ifelse(bass$Obtained == 5, "Security", "Unknown"))))))
+
+ggplot(bass[!is.na(bass$Obtained),] %>% group_by(Obtained) %>% tally(), aes(x = factor(Obtained), y = n/sum(n), 
+                                         fill = Obtained)) + geom_bar(stat = "identity",position="dodge") + xlab("") + ylab("Count") + ggtitle("Site where Substance was Obtained") + theme(legend.position = "none")
+
+ggplot(bass[!is.na(bass$Obtained),] %>% group_by(Obtained) %>% tally(), aes(x = factor(Obtained), y = n/sum(n), 
+                                         fill = Obtained)) + geom_bar(stat = "identity",position="dodge") + scale_y_continuous(labels=percent)  + xlab("") + ylab("Percentage") + ggtitle("Site where Substance was Obtained") + theme(legend.position = "none")
+
+```
+
+
+```{r}
+##----- Whom are they testing for -----##
+bass_test <- bass %>% dplyr::summarise(Self_tot = sum(1 - Testing_Self), Friends_tot = sum(1 - Testing_Friends), 
+                               Clients_tot = sum(1 - Testing_Clients), Other_tot = sum(1 - Testing_Other)) %>% 
+  gather(key = "Testing_For", value = "Total")
+
+ggplot(bass_test, aes(x = factor(Testing_For, labels = c("Clients", "Friends", "Other", "Self")), y = Total / sum(Total), fill = Testing_For)) + geom_bar(stat = "identity") + xlab("") + ylab("Count") + ggtitle("Substance Tested For") + theme(legend.position = "none")
+
+ggplot(bass_test, aes(x = factor(Testing_For, labels = c("Clients", "Friends", "Other", "Self")), y = Total / sum(Total), fill = Testing_For)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("") + ylab("Percentage") + ggtitle("Substance Tested For") + theme(legend.position = "none")
+
+```
+
+
+```{r}
+##------ What do users believe their sustance is ------##
+bass_substanceblf <- bass %>% dplyr::summarise(blf_MDMA = sum(1 - Belief_MDMA_a), blf_MDA = sum(1 - Belief_MDA_a), 
+                          blf_Ketamine = sum(1 - Belief_Ketamine_a), blf_Cocaine = sum(1 - Belief_Cocaine_a), 
+                          blf_Meth = sum(1 - Belief_Methamphetamine_a), blf_LSD = sum(1 - Belief_LSD_a),
+                          blf_Unknown = sum(1 - Belief_Unknown_a), blf_Other = sum(1 - Belief_Other_a)) %>% 
+  gather(key = "Substance_Believed", value = "Total")
+
+ggplot(bass_substanceblf, aes(x = factor(Substance_Believed, labels = c("Cocaine", "Ketamine", "LSD", "MDA", "MDMA", "Meth", "Other", "Unknown")), y = Total, fill = Substance_Believed)) + geom_bar(stat = "identity") + xlab("") + ylab("Count") + ggtitle("Belief of Sample") + theme(legend.position = "none")
+
+ggplot(bass_substanceblf, aes(x = factor(Substance_Believed, labels = c("Cocaine", "Ketamine", "LSD", "MDA", "MDMA", "Meth", "Other", "Unknown")), y = Total, fill = Substance_Believed)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("") + ylab("Percentage") + ggtitle("Belief of Sample") + theme(legend.position = "none")
+
+```
+
+```{r}
+##------ What is the substance actually ------##
+bass_substanceact <- bass %>% dplyr::summarise(act_MDMA = sum(1 - FTIR_result_MDMA_a1), act_MDA = sum(1 - FTIR_result_MDA_a1), 
+                                               act_Ketamine = sum(1 - FTIR_result_Ketamine_a1), act_Cocaine = sum(1 - FTIR_result_Cocaine_a1), 
+                                               act_Meth = sum(1 - FTIR_result_Methamphetamine_a1), act_LSD = sum(1 - FTIR_result_LSD_a1),
+                                               act_Unknown = sum(1 - FTIR_result_Unknown_a1), act_Other = sum(1 - FTIR_result_Other_a1)) %>% 
+  gather(key = "Substance_Result", value = "Total")
+
+ggplot(bass_substanceact, aes(x = factor(Substance_Result, labels = c("Cocaine", "Ketamine", "LSD", "MDA", "MDMA", "Meth", "Other", "Unknown")), y = Total, fill = Substance_Result)) + geom_bar(stat = "identity") + xlab("") + ylab("Count") + ggtitle("Result of Sample") + theme(legend.position = "none")
+
+ggplot(bass_substanceact, aes(x = factor(Substance_Result, labels = c("Cocaine", "Ketamine", "LSD", "MDA", "MDMA", "Meth", "Other", "Unknown")), y = Total, fill = Substance_Result)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("") + ylab("Percentage") + ggtitle("Result of Sample") + theme(legend.position = "none")
+```
+
+
+```{r}
+##-------------------------------- when no match in expectation and actual ---------------------------------##
+##------ What do users believe their sustance is ------##
+bass_substanceblf1 <- bass[bass$match == "No Match",] %>% dplyr::summarise(blf_MDMA = sum(1 - Belief_MDMA_a), blf_MDA = sum(1 - Belief_MDA_a), 
+                                               blf_Ketamine = sum(1 - Belief_Ketamine_a), blf_Cocaine = sum(1 - Belief_Cocaine_a), 
+                                               blf_Meth = sum(1 - Belief_Methamphetamine_a), blf_LSD = sum(1 - Belief_LSD_a),
+                                               blf_Unknown = sum(1 - Belief_Unknown_a), blf_Other = sum(1 - Belief_Other_a)) %>% 
+  gather(key = "Substance_Believed", value = "Total")
+
+##------ What is the sustance actually ------##
+bass_substanceact1 <- bass[bass$match == "No Match",] %>% dplyr::summarise(act_MDMA = sum(1 - FTIR_result_MDMA_a1), act_MDA = sum(1 - FTIR_result_MDA_a1), 
+                                               act_Ketamine = sum(1 - FTIR_result_Ketamine_a1), act_Cocaine = sum(1 - FTIR_result_Cocaine_a1), 
+                                               act_Meth = sum(1 - FTIR_result_Methamphetamine_a1), act_LSD = sum(1 - FTIR_result_LSD_a1),
+                                               act_Unknown = sum(1 - FTIR_result_Unknown_a1), act_Other = sum(1 - FTIR_result_Other_a1)) %>% 
+  gather(key = "Substance_Result", value = "Total")
+
+colnames(bass_substanceact1)[colnames(bass_substanceact1) == "Substance_Result"] <- "Substance"
+colnames(bass_substanceblf1)[colnames(bass_substanceblf1) == "Substance_Believed"] <- "Substance"
+
+bass_actblf <- bind_rows(bass_substanceact1,bass_substanceblf1)
+bass_actblf$Substance <- substring(bass_actblf$Substance,5,nchar(bass_actblf$Substance))
+bass_actblf$Type <- rep(c("Actual", "Belief"), each = 8)
+
+ggplot(bass_actblf, aes(Substance, Total, fill=Type)) + 
+  geom_bar(stat = "identity",position="dodge") + xlab("") + ylab("Count") + ggtitle("Actual vs Belief by Substance") 
+
+ggplot(bass_actblf, aes(Substance, Total / sum(bass_actblf$Total), fill=Type)) + 
+  geom_bar(stat = "identity",position="dodge") + scale_y_continuous(labels=percent) + xlab("") + ylab("Count") + ggtitle("Actual vs Belief by Substance") 
+## Most mistmatch is in Other
+
+```
+
+
+```{r}
+##----- Counting combinations of substances in the drug -----##
+bass$count_substance <- apply(bass[,c("FTIR_result_MDMA_a1", 
+                                   "FTIR_result_MDA_a1", 
+                                   "FTIR_result_Ketamine_a1",
+                                   "FTIR_result_Cocaine_a1",
+                                   "FTIR_result_Methamphetamine_a1",
+                                   "FTIR_result_LSD_a1",
+                                   "FTIR_result_Unknown_a1",
+                                   "FTIR_result_Other_a1")], 1, function(x){8-sum(x)})
+
+##----- Getting the combinations -----##
+bass$combinations <- paste0(bass$FTIR_result_MDMA_a1, ", ", 
+                                       bass$FTIR_result_MDA_a1, ", ", 
+                                       bass$FTIR_result_Ketamine_a1, ", ",
+                                       bass$FTIR_result_Cocaine_a1, ", ",
+                                       bass$FTIR_result_Methamphetamine_a1, ", ",
+                                       bass$FTIR_result_LSD_a1, ", ",
+                                       bass$FTIR_result_Unknown_a1, ", ",
+                                       bass$FTIR_result_Other_a1)
+
+bass_combinations <- bass[bass$count_substance>1,] ## 24.69% of service users have used some combination
+length(unique(bass$combinations[bass$count_substance>1])) ## 19 unique combinations
+table(bass$combinations[bass$count_substance>1]) ## MDMA & Unknown is the most at 8.6% then Cocaine & Unkown at 6.2%
+
+```
+
+
+```{r}
+##----- FE Intention columns -----##
+bass$Intention_count <- apply(bass[,c("Intention_Nochange_a", 
+                                      "Intention_More_a", 
+                                      "Intention_Less_a",
+                                      "Intention_Dispose_a",
+                                      "Intention_Friend_a",
+                                      "Intention_Change_a",
+                                      "Intention_Naloxone_a",
+                                      "Intention_Other_a")], 1, function(x){8-sum(x)})
+
+length(bass$Intention_count[bass$Intention_count > 1]) / nrow(bass)
+## 23.4% of respondents have more than 1 intention about what and how they will use the substance
+
+```
+
+
+```{r}
+##----- Creating a column of intention as either Harm Reduction or no Harm Reduction -----##
+bass$Intention_group <- ifelse(bass$Intention_Dispose_a == 0 | bass$Intention_Friend_a == 0 |
+                                 bass$Intention_Change_a == 0 | bass$Intention_Less_a == 0 |
+                                 bass$Intention_Naloxone_a == 0, "Harm Reduction",
+                               "No Change")
+
+length(bass$Intention_group[bass$Intention_group == "Harm Reduction"]) / nrow(bass)
+## 29.26% respondents seem to be taking drugs in a safer manner
+```
+
+
+```{r}
+bass$Behaviour_change <- ifelse(bass$Intention_Nochange_a == 0, "No Change", "Behaviour Change")
+length(bass$Behaviour_change[bass$Behaviour_change == "Behaviour Change"]) / nrow(bass)
+## 21.77% respondents suggest some sort of behaviour change
+```
+
+```{r}
+length(bass$Behaviour_change[bass$Intention_group == "Harm Reduction" & 
+                              bass$Behaviour_change == "Behaviour Change"]) / nrow(bass)
+## 9.5% of respondents have a change in Intention and will use safer means to consume the substances
+```
+
+```{r}
+table(bass$Surprised1) / nrow(bass)
+## 26% SU's reported being surprised by the results
+```
+
+
+```{r}
+nrow(bass[bass$Surprised1 == 0 & bass$Behaviour_change == "Behaviour Change",]) / nrow(bass[bass$Surprised1 == 0 & !is.na(bass$Surprised1),])
+## Of the SU's who were surprised, 47% of them said they would change change the way the intended to take it
+
+```
+
+```{r}
+nrow(bass[bass$Surprised1 == 0 & bass$Intention_group == "Harm Reduction",]) / nrow(bass[bass$Surprised1 == 0 & !is.na(bass$Surprised1),])
+## Of the SU's who were surprised, 33% of them said they would consume it in a safer manner
+```
+
+
+```{r}
+nrow(bass[bass$Surprised1 == 0 & bass$Behaviour_change == "Behaviour Change" & bass$Intention_group == "Harm Reduction",]) / nrow(bass[bass$Surprised1 == 0 & !is.na(bass$Surprised1),])
+## Of the SU's who were surprised, 20% of them said they would consume it in a safer manner and change the way they intended to consume it
+```
+
+
+```{r}
+length(bass$Intention_group[bass$Behaviour_change == "Behaviour Change" & bass$Surprised1 == 0]) / nrow(bass)
+## 12.34% of respondents who were surprised suggested a Change in Behaviour
+```
+
+```{r}
+length(bass$Intention_group[bass$Intention_group == "Harm Reduction" & 
+                              bass$Behaviour_change == "Behaviour Change" & bass$Surprised1 == 0]) / nrow(bass)
+## 5.1% of respondents who were surprised by the results have a chane in Intention and will use safer 
+## means to consume the substances.
+```
+
+```{r}
+##----- FE Type of substance -----##
+bass$Type_count <- apply(bass[,c("Type_Powder_s1", 
+                                      "Type_Crystal_s1", 
+                                      "Type_Blotter_s1",
+                                      "Type_PressTab_s1",
+                                      "Type_Liquid_s1",
+                                      "Type_Gummy_s1",
+                                      "Type_Other_s1")], 1, function(x){7-sum(x)})
+
+bass$Type <- ifelse(bass$Type_Powder_s1 == 0, "Powder",
+                               ifelse(bass$Type_Crystal_s1 == 0, "Crystal",
+                                      ifelse(bass$Type_Blotter_s1 == 0, "Blotter",
+                                             ifelse(bass$Type_PressTab_s1 == 0, "PressTab",
+                                                    ifelse(bass$Type_Liquid_s1 == 0, "Liquid",
+                                                           ifelse(bass$Type_Gummy_s1 == 0, "Gummy",
+                                                                  "Other"))))))
+
+```
+
+
+```{r}
+##----- Creating Results column to compare belief with just Primary actual substance -----##
+##----- Creating actual results column to be inline with expectation -----##
+bass$FTIR_result_MDMA_2 <- NA
+bass$FTIR_result_MDA_2 <- NA
+bass$FTIR_result_Ketamine_2 <- NA
+bass$FTIR_result_Cocaine_2 <- NA
+bass$FTIR_result_Methamphetamine_2 <- NA
+bass$FTIR_result_LSD_2 <- NA
+bass$FTIR_result_Unknown_2 <- NA
+bass$FTIR_result_Other_2 <- NA
+
+##---- Creating binary values from the FTIR actual results -----##
+bass$FTIR_result_MDMA_2 <- ifelse(bass$FTIR_result_a1 == 1, 0, 1)
+bass$FTIR_result_MDA_2 <- ifelse(bass$FTIR_result_a1 == 2, 0, 1)
+bass$FTIR_result_Ketamine_2 <- ifelse(bass$FTIR_result_a1 == 3, 0, 1)
+bass$FTIR_result_Cocaine_2 <- ifelse(bass$FTIR_result_a1 == 4, 0, 1)
+bass$FTIR_result_Methamphetamine_2 <- ifelse(bass$FTIR_result_a1 == 5, 0, 1)
+bass$FTIR_result_LSD_2 <- ifelse(bass$FTIR_result_a1 == 6, 0, 1)
+bass$FTIR_result_Unknown_2 <- ifelse(bass$FTIR_result_a1 == 8, 0, 1)
+bass$FTIR_result_Other_2 <- ifelse(bass$FTIR_result_a1 == 7, 0, 1)
+
+
+bass[c("FTIR_result_MDMA_2", "FTIR_result_MDA_2",
+       "FTIR_result_Ketamine_2", "FTIR_result_Cocaine_2", "FTIR_result_Methamphetamine_2",
+       "FTIR_result_LSD_2", "FTIR_result_Unknown_2", "FTIR_result_Other_2")][is.na(bass[c("FTIR_result_MDMA_2", "FTIR_result_MDA_2",
+                                                                                             "FTIR_result_Ketamine_2", "FTIR_result_Cocaine_2", "FTIR_result_Methamphetamine_2",
+                                                                                             "FTIR_result_LSD_2", "FTIR_result_Unknown_2", "FTIR_result_Other_2")])] <- 1
+
+
+bass$match2 <- ifelse(bass$Belief_MDMA_a == bass$FTIR_result_MDMA_2 & bass$Belief_MDA_a == bass$FTIR_result_MDA_2 & 
+                        bass$Belief_Ketamine_a == bass$FTIR_result_Ketamine_2 & 
+                        bass$Belief_Cocaine_a == bass$FTIR_result_Cocaine_2 & 
+                        bass$Belief_Methamphetamine_a == bass$FTIR_result_Methamphetamine_2 & 
+                        bass$Belief_LSD_a == bass$FTIR_result_LSD_2 & bass$Belief_Unknown_a == bass$FTIR_result_Unknown_2 &
+                        bass$Belief_Other_a == bass$FTIR_result_Other_2, "Match", "No Match")
+
+
+length(bass$match[bass$match == "Match"]) / nrow(bass) 
+## 62% of Matches 
+length(bass$match2[bass$match2 == "Match"]) / nrow(bass) 
+## 77% of Matches when belief is compared to just the actual result of primary substance
+
+```
+
+
+```{r}
+##----- Check percentage of substances by Gender -----##
+a <- bass %>% group_by(Gender) %>% summarise(MDMA = sum(1 - FTIR_result_MDMA_a1), 
+                                        MDA = sum(1 - FTIR_result_MDA_a1),
+                                        Ketamine = sum(1 - FTIR_result_Ketamine_a1),
+                                        Cocaine = sum(1 - FTIR_result_Cocaine_a1),
+                                        Methampethamine = sum(1 - FTIR_result_Methamphetamine_a1),
+                                        LSD = sum(1 - FTIR_result_LSD_a1),
+                                        Other = sum(1 - FTIR_result_Other_a1),
+                                        Unknown = sum(1 - FTIR_result_Unknown_a1)) %>% gather(key = "Substance",
+                                                                                              value = "Count", -Gender)
+
+
+ggplot(a[a$Gender == "Female",], aes(x = factor(Substance), y = Count / sum(a$Count[a$Gender == "Female"]), fill = Substance)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("") + ylab("Percentage") + ggtitle("Substances by Female") + theme(legend.position = "none")
+
+ggplot(a[a$Gender == "Male",], aes(x = factor(Substance), y = Count / sum(a$Count[a$Gender == "Male"]), fill = Substance)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent) + xlab("") + ylab("Percentage") + ggtitle("Substances by Male") + theme(legend.position = "none")
+
+ggplot(a[a$Gender == "Nonbinary",], aes(x = factor(Substance), y = Count / sum(a$Count[a$Gender == "Nonbinary"]), fill = Substance)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent)  + xlab("") + ylab("Percentage") + ggtitle("Substances by Nonbinary") + theme(legend.position = "none")
+ 
+ggplot(a[a$Gender == "Unknown",], aes(x = factor(Substance), y = Count / sum(a$Count[a$Gender == "Unknown"]), fill = Substance)) + geom_bar(stat = "identity") + scale_y_continuous(labels=percent)  + xlab("") + ylab("Percentage") + ggtitle("Substances by Unknown") + theme(legend.position = "none")
+
+
+ggplot(a, aes(Substance, Count, fill=Gender)) + 
+  geom_bar(stat = "identity",position="dodge")+ xlab("") + ylab("Count") + ggtitle("Substances by Gender") 
+
+ggplot(a, aes(Substance, Count, fill=Gender)) + 
+  geom_bar(stat = "identity")  + xlab("") + ylab("Count") + ggtitle("Substances by Gender") 
+
+```
+
+```{r}
+bass$combo_name <- NA
+for(i in 1:nrow(bass)){
+  if(strsplit(bass$combinations[i],",")[[1]][1] == "0"){
+    bass$combo_name[i] <- paste("MDMA ")
+  }
+  if(strsplit(bass$combinations[i],",")[[1]][2] == " 0"){
+    bass$combo_name[i] <- paste(bass$combo_name[i], "MDA ")
+  }
+  if(strsplit(bass$combinations[i],",")[[1]][3] == " 0"){
+    bass$combo_name[i] <- paste(bass$combo_name[i], "Ketamine ")
+  }
+  if(strsplit(bass$combinations[i],",")[[1]][4] == " 0"){
+    bass$combo_name[i] <- paste(bass$combo_name[i], "Cocaine ")
+  }
+  if(strsplit(bass$combinations[i],",")[[1]][5] == " 0"){
+    bass$combo_name[i] <- paste(bass$combo_name[i], "Methamphetamine ")
+  }
+  if(strsplit(bass$combinations[i],",")[[1]][6] == " 0"){
+    bass$combo_name[i] <- paste(bass$combo_name[i], "LSD ")
+  }
+  if(strsplit(bass$combinations[i],",")[[1]][7] == " 0"){
+    bass$combo_name[i] <- paste(bass$combo_name[i], "Other ")
+  }
+  if(strsplit(bass$combinations[i],",")[[1]][8] == " 0"){
+    bass$combo_name[i] <- paste(bass$combo_name[i], "Unknown ") 
+  }
+}
+
+bass$combo_name <- gsub("NA","",bass$combo_name)
+bass$combo_name <- gsub("^ ","",bass$combo_name)
+bass$combo_name <- gsub(" $","",bass$combo_name)
+bass$combo_name <- gsub("\\W ","\\, ",bass$combo_name)
+```
+
+```{r}
+ggplot(bass[bass$count_substance>1,], aes(x = factor(combo_name), fill = combo_name)) + 
+  geom_bar(stat = "count") + theme(axis.title.x=element_blank(),axis.text.x=element_blank()) + ylab("Count") + ggtitle("Combinations of Substances")
+
+ggplot(bass[bass$count_substance>1,], aes(x = factor(combo_name), fill = combo_name)) + 
+  geom_bar(aes(y = (..count..)/sum(..count..))) + scale_y_continuous(labels=percent)+ theme(axis.title.x=element_blank(),axis.text.x=element_blank()) + ylab("Percentage") + ggtitle("Combinations of Substances") 
+```
+
+```{r}
+#----- Checking LSD Test with belief of LSD -----##
+bass$match2 <- ifelse(bass$LSD_result == 0 & bass$Belief_LSD_a == 0, "Match", bass$match2)
+length(bass$match2[bass$match2 == "Match"]) / nrow(bass)
+## 81.27% match
+
+bass$chk <- ifelse(bass$LSD_result == 0 & bass$Belief_LSD_a == 0, "LSD", "")
+bass$comb1 <- ifelse(bass$chk == "LSD" & !is.na(bass$combo_name)
+                      ,paste0(bass$combo_name, ", ", bass$chk), 
+                     ifelse(bass$chk == "LSD" & is.na(bass$combo_name), paste0("LSD"), bass$combo_name))
+
+bass$combo_name <- bass$comb1
+bass$chk <- NULL
+bass$comb1 <- NULL
+```
+
+```{r}
+##----- Unsupervised Learning -----##
+sapply(bass[!is.na(bass$combo_name),colnames(bass) %in% c("Gender", "Intention_group", 
+                                                          "Behaviour_change", "Type",
+                                                          "match2", "combo_name")], function(x){class(x)})
+
+bass$Gender <- as.factor(bass$Gender)
+bass$Intention_group <- as.factor(bass$Intention_group)
+bass$Behaviour_change <- as.factor(bass$Behaviour_change)
+bass$Type <- as.factor(bass$Type)
+bass$match2 <- as.factor(bass$match2)
+bass$combo_name <- as.factor(bass$combo_name)
+
+```
+
+
+```{r}
+##----- Comupting the Gower Dissimiarlity matrix -----##
+gow_dist <- daisy(bass[,colnames(bass) %in% c("Gender", "Intention_group", "Behaviour_change", "Type",
+                                 "match2", "combo_name")],metric = "gower")
+
+
+```
+
+
+```{r}
+##----- Complete Distance -----##
+comp_clus <- hclust(gow_dist, method = "complete")
+plot(comp_clus)
+```
+
+
+```{r}
+##----- Single Distance -----##
+sing_clu <- hclust(gow_dist, method = "single")
+plot(sing_clu)
+```
+
+```{r}
+##----- Average Distance -----##
+avg_clu <- hclust(gow_dist, method = "average")
+plot(avg_clu)
+```
+
+
+```{r}
+##----- Ward Distance -----##
+ward_1 <- hclust(gow_dist, method = "ward.D")
+plot(ward_1)
+
+```
+
+```{r}
+##----- WardD2 Distance -----##
+ward_clu <- hclust(gow_dist, method = "ward.D2")
+plot(ward_clu)
+
+```
+
+```{r}
+#----- Creating 3 clusters since from Heirarichal it suggests 3 would be a good fit -----##
+set.seed(5254)
+grps <- kmeans(cmdscale(gow_dist), centers = 3, nstart = 1000)
+grps <- grps$cluster
+plot(cmdscale(gow_dist), col = grps)
+## From the plot, maybe more clusters would be better
+```
+
+```{r}
+##----- Comupting scree Plot for k-means to get better idea of clusters -----##
+bass$PreviousDC <- as.factor(bass$PreviousDC)
+
+set.seed(123)
+# function to compute total within-cluster sum of square 
+wss <- function(k) {
+  kmeans(cmdscale(gow_dist), k, nstart = 1000)$tot.withinss
+}
+
+# Compute and plot wss for k = 1 to k = 15
+k.values <- 1:15
+
+# extract wss for 2-15 clusters
+wss_values <- map_dbl(k.values, wss)
+
+plot(k.values, wss_values,
+       type="b", pch = 19, frame = FALSE, 
+       xlab="Number of clusters K",
+       ylab="Total within-clusters sum of squares")
+
+## The Scree Plot suggets that 3-4 would be a good fit
+```
+
+
+```{r}
+##----- Creating 4 clusters as recommended by Scree plot -----##
+set.seed(4164)
+grps1 <- kmeans(cmdscale(gow_dist), centers = 4, nstart = 1500)
+grps1 <- grps1$cluster
+plot(cmdscale(gow_dist), col = grps1)
+
+## It still feels as though we can have more clusters. Looking at the plot it seems that 8 cliuster's would be better for the data
+```
+
+```{r}
+##----- Creating 8 clusters -----##
+set.seed(4164)
+grps <- kmeans(cmdscale(gow_dist), centers = 8, nstart = 1000)
+grps <- grps$cluster
+plot(cmdscale(gow_dist), col = grps)
+```
+
+
+```{r}
+##----- Mixture modelling -----##
+mcluster1 <- Mclust(cmdscale(gow_dist))
+plot(cmdscale(gow_dist), col = mcluster1$classification, main = "Mixture Model")
+```
+
+
+```{r}
+##----- Assigning groups back to data -----##
+bass$cluster <- grps
+```
+
+```{r}
+##----- Random Forest to predict Discarded -----##
+bass$Obtained <- as.factor(bass$Obtained)
+bass$Surprised1 <- as.factor(bass$Surprised1)
+bass$Discarded <- as.factor(bass$Discarded)
+
+data <- bass[!is.na(bass$Discarded),c("Gender", "Intention_group", "Behaviour_change", "Type",
+                           "match2", "combo_name", "Discarded", "Surprised1", "Obtained")]
+
+data$combo_name[is.na(data$combo_name)] <- "Unknown"
+data$match2[is.na(data$match2)] <- "No Match"
+data$Surprised1[is.na(data$Surprised1)] <- "1"
+data$Obtained[is.na(data$Obtained)] <- "Offsite"
+
+set.seed(7)
+bass_rf <- randomForest(Discarded ~ ., data, mtry = 4, ntree = 1000, importance=TRUE)
+varImpPlot(bass_rf) 
+bass_rf
+precision <- 6 / (8)
+recall <- 6 / 16 
+f1 <- 2 * ((precision * recall) / (precision + recall))
+```
+
+```{r}
+##----- Correlation and Heatmap of Volunteer and combination of substances found in sample -----##
+Lambda(bass$Initials, bass$combo_name, direction = c("symmetric", "row", "column"), conf.level = 0.95) ## 0.0806
+## There is negligible correlation between the person who collected the information and the substance combo
+
+ggplot(bass, aes(Initials, combo_name)) + 
+  geom_tile()
+## + xlab("") + ylab("Percentage") + ggtitle("Substances by Female") + theme(legend.position = "none")
+
+##----- Heat map by days-----##
+ggplot(bass[bass$DateSurvey == "2019-07-12",], aes(Initials, combo_name)) + 
+  geom_tile()
+
+ggplot(bass[bass$DateSurvey == "2019-07-13",], aes(Initials, combo_name)) + 
+  geom_tile()
+
+ggplot(bass[bass$DateSurvey == "2019-07-14",], aes(Initials, combo_name)) + 
+  geom_tile()
+
+```
+
+```{r}
+##----- Check Match without Other and Unknown -----##
+bass$match3 <- ifelse(bass$Belief_MDMA_a == bass$FTIR_result_MDMA_2 & bass$Belief_MDA_a == bass$FTIR_result_MDA_2 & 
+                        bass$Belief_Ketamine_a == bass$FTIR_result_Ketamine_2 & 
+                        bass$Belief_Cocaine_a == bass$FTIR_result_Cocaine_2 & 
+                        bass$Belief_Methamphetamine_a == bass$FTIR_result_Methamphetamine_2 & 
+                        bass$Belief_LSD_a == bass$FTIR_result_LSD_2, "Match", "No Match")
+
+length(bass$match3[bass$match3 == "Match"]) / nrow(data)
+## 86% of SU's have a match when we do not consider the "Other" & "Unknown" substances
+```
+
+
+```{r}
+##----- Setting up Intentions in 1 column to use for CatBoosting -----##
+bass$Intention <- ifelse(bass$Intention_Nochange_a == 0, "No Change", 
+                         ifelse(bass$Intention_Change_a == 0, "Change in Consumption", 
+                                ifelse(bass$Intention_Dispose_a == 0, "Dispose", 
+                                       ifelse(bass$Intention_Friend_a == 0, "Friend", 
+                                              ifelse(bass$Intention_Less_a == 0, "Take Less",
+                                                     ifelse(bass$Intention_More_a == 0, "Take More", 
+                                                            ifelse(bass$Intention_Naloxone_a == 0, "Naloxone",
+                                                                   ifelse(bass$Intention_Other_a == 0, "Other", "Unknown"))))))))
+
+#write.csv(bass, "D:\\UBC Assignments\\Previous Projects\\Data for students\\BassCoast_CatBoost.csv", row.names = F)
+```
+
+
+```{r}
+##----- Creating Nested Belief and actual -----##
+bass_MDMA <- bass[bass$Belief_MDMA_a == 0, c("Belief_MDMA_a", "FTIR_result_a1")]
+bass_belief_MDMA <- bass_MDMA %>% count(Belief_MDMA_a, sort = TRUE, name = "Actual")
+bass_actual_MDMA <- bass_MDMA %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 1)
+
+bass_MDA <- bass[bass$Belief_MDA_a == 0, c("Belief_MDA_a", "FTIR_result_a1")]
+bass_belief_MDA <- bass_MDA %>% count(Belief_MDA_a, sort = TRUE, name = "Actual")
+bass_actual_MDA <- bass_MDA %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 2)
+
+bass_Ketamine <- bass[bass$Belief_Ketamine_a == 0, c("Belief_Ketamine_a", "FTIR_result_a1")]
+bass_belief_ketamine <- bass_Ketamine %>% count(Belief_Ketamine_a, sort = TRUE, name = "Actual")
+bass_actual_ketamine <- bass_Ketamine %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 3)
+
+bass_Cocaine <- bass[bass$Belief_Cocaine_a == 0, c("Belief_Cocaine_a", "FTIR_result_a1")]
+bass_belief_Cocaine <- bass_Cocaine %>% count(Belief_Cocaine_a, sort = TRUE, name = "Actual")
+bass_actual_Cocaine <- bass_Cocaine %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 4)
+
+bass_Methamphetamine <- bass[bass$Belief_Methamphetamine_a == 0, c("Belief_Methamphetamine_a", "FTIR_result_a1")]
+bass_belief_Methamphetamine <- bass_Methamphetamine %>% count(Belief_Methamphetamine_a, sort = TRUE, name = "Actual")
+bass_actual_Methamphetamine <- bass_Methamphetamine %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 5)
+
+bass_LSD <- bass[bass$Belief_LSD_a == 0, c("Belief_LSD_a", "LSD_result")]
+bass_belief_LSD <- bass_LSD %>% count(Belief_LSD_a, sort = TRUE, name = "Actual")
+bass_actual_LSD <- bass_LSD %>% count(LSD_result, sort = TRUE, name = "Actual") %>% filter(LSD_result == 0)
+
+bass_Other <- bass[bass$Belief_Other_a == 0, c("Belief_Other_a", "FTIR_result_a1")]
+bass_belief_Other <- bass_Other %>% count(Belief_Other_a, sort = TRUE, name = "Actual")
+bass_actual_Other <- bass_Other %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 7)
+
+bass_Unknown <- bass[bass$Belief_Unknown_a == 0, c("Belief_Unknown_a", "FTIR_result_a1")]
+bass_belief_Unknown <- bass_Unknown %>% count(Belief_Unknown_a, sort = TRUE, name = "Actual")
+bass_actual_Unknown <- bass_Unknown %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 8)
+
+colnames(bass_actual_LSD) <- c("FTIR_result_a1", "Actual")
+bass_nested_actual <- rbind(bass_actual_MDMA, bass_actual_MDA, bass_actual_ketamine, bass_actual_Cocaine,
+                            bass_actual_Methamphetamine, bass_actual_LSD, bass_actual_Other, bass_actual_Unknown)
+
+bass_belief_MDMA$Belief_MDMA_a <- 1
+bass_belief_MDA$Belief_MDA_a <- 2
+bass_belief_ketamine$Belief_Ketamine_a <- 3
+bass_belief_Cocaine$Belief_Cocaine_a <- 4
+bass_belief_Methamphetamine$Belief_Methamphetamine_a <- 5
+bass_belief_LSD$Belief_LSD_a <- 6
+bass_belief_Other$Belief_Other_a <- 7
+bass_belief_Unknown$Belief_Unknown_a <- 8
+
+colnames(bass_belief_MDMA) <- c("Belief_drug", "Belief")
+colnames(bass_belief_MDA) <- c("Belief_drug", "Belief")
+colnames(bass_belief_ketamine) <- c("Belief_drug", "Belief")
+colnames(bass_belief_Cocaine) <- c("Belief_drug", "Belief")
+colnames(bass_belief_Methamphetamine) <- c("Belief_drug", "Belief")
+colnames(bass_belief_LSD) <- c("Belief_drug", "Belief")
+colnames(bass_belief_Other) <- c("Belief_drug", "Belief")
+colnames(bass_belief_Unknown) <- c("Belief_drug", "Belief")
+
+bass_nested_belief <- rbind(bass_belief_MDMA, bass_belief_MDA, bass_belief_ketamine, bass_belief_Cocaine, 
+                           bass_belief_Methamphetamine, bass_belief_LSD, bass_belief_Other, bass_belief_Unknown)
+
+bass_nested <- cbind(bass_nested_actual, bass_nested_belief)
+bass_nested <- bass_nested[, c("FTIR_result_a1", "Belief", "Actual")]
+bass_nested$FTIR_result_a1 <- ifelse(bass_nested$FTIR_result_a1 == 1, "MDMA", 
+                                     ifelse(bass_nested$FTIR_result_a1 == 2, "MDA", 
+                                     ifelse(bass_nested$FTIR_result_a1 == 3, "Ketamine", 
+                                     ifelse(bass_nested$FTIR_result_a1 == 4, "Cocaine", 
+                                     ifelse(bass_nested$FTIR_result_a1 == 5, "Methamphetamine", 
+                                     ifelse(bass_nested$FTIR_result_a1 == 0, "LSD", 
+                                     ifelse(bass_nested$FTIR_result_a1 == 7, "Other", "Unknown" 
+                                     )))))))
+
+bass_nested <- gather(bass_nested, Type, Total, Belief:Actual)
+
+####
+ggplot(bass_nested, aes(FTIR_result_a1, Total, fill=Type)) + geom_bar(stat = "identity",position="dodge", show.legend = T) +
+  labs(
+        title = "Does Belief Match Results? (Bass)" ,
+y= "No. of Checks", 
+    x= "")+
+  theme(
+    panel.grid.major = element_line(colour = "grey60", size = .2),
+    panel.grid.minor = element_line(colour = "grey80", size = .2),
+    legend.background = element_rect(fill = "white", size = 4, colour = "white"),
+    legend.justification = c(0, 1),
+    legend.position = c(.73, .9),
+ legend.title = element_blank(),
+    plot.title = element_text(face = "bold", size = 16),
+      axis.title.y = element_text(face = "bold", size = 14, colour = "grey30", margin =       ggplot2::margin(r = 14)),
+      axis.title.x = element_text(face = "bold", size = 14, colour = "grey30", margin = ggplot2::margin(t = 13)),
+    axis.text = element_text(face="bold", size = 12),
+    axis.ticks = element_line(size = 3)
+  ) +
+scale_x_discrete(NULL, labels = c("Cocaine", "Ketamine", "LSD", "MDA", "MDMA", "Meth", "Other", "Unknown"))
+
+```
+
+```{r}
+##----- Contingency Tables -----##
+## MDMA
+prop.table(table(bass$Behaviour_change[bass$FTIR_result_a1 == 1], bass$Surprised1[bass$FTIR_result_a1 == 1]), 1)
+## From this table we can see that 41% SU's were Surprised by the result and suggested a Behaviour Change. 80% who were not surprised by the result suggested No Change in their behaviour 
+
+## MDA
+prop.table(table(bass$Behaviour_change[bass$FTIR_result_a1 == 2], bass$Surprised1[bass$FTIR_result_a1 == 2]), 1)
+
+## Ketamine
+prop.table(table(bass$Behaviour_change[bass$FTIR_result_a1 == 3], bass$Surprised1[bass$FTIR_result_a1 == 3]), 1)
+
+## Cocaine
+prop.table(table(bass$Behaviour_change[bass$FTIR_result_a1 == 4], bass$Surprised1[bass$FTIR_result_a1 == 4]), 1)
+
+## Meth
+prop.table(table(bass$Behaviour_change[bass$FTIR_result_a1 == 5], bass$Surprised1[bass$FTIR_result_a1 == 5]), 1)
+
+## LSD
+prop.table(table(bass$Behaviour_change[bass$LSD_result == 0], bass$Surprised1[bass$LSD_result == 0]), 1)
+
+## Other
+prop.table(table(bass$Behaviour_change[bass$FTIR_result_a1 == 7], bass$Surprised1[bass$FTIR_result_a1 == 7]), 1)
+
+## Unknown
+prop.table(table(bass$Behaviour_change[bass$FTIR_result_a1 == 8], bass$Surprised1[bass$FTIR_result_a1 == 8]), 1)
+```
+
+```{r}
+##----- Market Basket Analysis -----##
+bass_mb <- bass[, c("FTIR_result_MDMA_a1", "FTIR_result_MDA_a1", "FTIR_result_Ketamine_a1", 
+                    "FTIR_result_Cocaine_a1", "FTIR_result_Methamphetamine_a1", "FTIR_result_LSD_a1", 
+                    "FTIR_result_Other_a1", "FTIR_result_Unknown_a1")]
+
+bass_mb <- apply(bass_mb, 2, function(x){ifelse(x == 0, 1, 0)})
+bass_mb <- as.data.frame(bass_mb)
+bass_mb$count <- apply(bass_mb, 1, function(x){sum(x)})
+bass_mb <- bass_mb[bass_mb$count > 1, ]
+bass_mb <- apply(bass_mb, 2, factor)
+bass_mb <- as.data.frame(bass_mb)
+bass_mb$count <- NULL
+#dt2 <-  as(bass_mb,"transactions")
+
+rules <- apriori(bass_mb, parameter = list(supp = 0.001, conf = 0.8))
+summary(rules)
+inspect(sort(rules, by="support")[1:20])
+inspect(sort(rules, by="confidence")[1:20])
+inspect(sort(rules, by="lift")[1:10])
+## There do not seem to be any good associations present in the results. Hence we cannot use market basket analysis
+```
+
+
+```{r}
+##----- Statistical Test for Gender at Bass Coaast -----##
+stat_gender <- as.data.frame(table(bass$Gender))
+stat_gender$Freq <- stat_gender$Freq / nrow(bass) 
+
+## Ho: There is no significant difference between proportion of Males and Females at Bass Coast
+## H1: There is a significant difference between proportion of Males and Females at Bass Coast
+prop.test(x = stat_gender$Freq[1:2], n = c(nrow(bass), nrow(bass)))
+## Since p-cal < 0.05. We reject Ho and conclude that there is a significant difference between Males and Females accessing Drug Checking Services at Bass Coast
+```
+
+
+```{r}
+##----- Statistical test for Match of belief and actual for each drug -----##
+## Ho: There is no significant difference between proportion of Belief and actual for MDMA at Bass Coast
+## H1: There is a significant difference between proportion of Belief and actual for MDMA at Bass Coast
+
+#bass_nested1 <- spread(bass_nested, key = Type, value = Total)
+
+prop.test(x = c(bass_nested$Total[bass_nested$FTIR_result_a1 == "MDMA" & 
+                                    bass_nested$Type == "Belief"], bass_nested$Total[bass_nested$FTIR_result_a1 == "MDMA" & 
+                                    bass_nested$Type == "Actual"]), n = c(nrow(bass_MDMA), nrow(bass_MDMA)))
+
+## Since p-cal < 0.05. We reject Ho and conclude that there is a significant difference between the proportion of MDMA belief and actual
+
+prop.test(x = c(bass_nested$Total[bass_nested$FTIR_result_a1 == "MDA" & 
+                                    bass_nested$Type == "Belief"], bass_nested$Total[bass_nested$FTIR_result_a1 == "MDA" & 
+                                    bass_nested$Type == "Actual"]), n = c(nrow(bass_MDA), nrow(bass_MDA)))
+
+## Since p-cal < 0.05. We reject Ho and conclude that there is a significant difference between the proportion of MDA belief and actual
+
+prop.test(x = c(bass_nested$Total[bass_nested$FTIR_result_a1 == "Ketamine" & 
+                                    bass_nested$Type == "Belief"], bass_nested$Total[bass_nested$FTIR_result_a1 == "Ketamine" & 
+                                    bass_nested$Type == "Actual"]), n = c(nrow(bass_Ketamine), nrow(bass_Ketamine)))
+
+## Since p-cal < 0.05. We reject Ho and conclude that there is a significant difference between the proportion of Ketamine belief and actual
+
+prop.test(x = c(bass_nested$Total[bass_nested$FTIR_result_a1 == "Cocaine" & 
+                                    bass_nested$Type == "Belief"], bass_nested$Total[bass_nested$FTIR_result_a1 == "Cocaine" & 
+                                    bass_nested$Type == "Actual"]), n = c(nrow(bass_Cocaine), nrow(bass_Cocaine)))
+
+## Since p-cal < 0.05. We reject Ho and conclude that there is a significant difference between the proportion of Cocaine belief and actual
+
+prop.test(x = c(bass_nested$Total[bass_nested$FTIR_result_a1 == "Methamphetamine" & 
+                                    bass_nested$Type == "Belief"], bass_nested$Total[bass_nested$FTIR_result_a1 == "Methamphetamine" & 
+                                    bass_nested$Type == "Actual"]), n = c(nrow(bass_Methamphetamine), nrow(bass_Methamphetamine)))
+
+## Since p-cal > 0.05. We fail to reject Ho and conclude that there is no significant difference between the proportion of Meth belief and actual
+
+prop.test(x = c(bass_nested$Total[bass_nested$FTIR_result_a1 == "LSD" & 
+                                    bass_nested$Type == "Belief"], bass_nested$Total[bass_nested$FTIR_result_a1 == "LSD" & 
+                                    bass_nested$Type == "Actual"]), n = c(nrow(bass_LSD), nrow(bass_LSD)))
+
+## Since p-cal < 0.05. We reject Ho and conclude that there is a significant difference between the proportion of LSD belief and actual
+
+prop.test(x = c(bass_nested$Total[bass_nested$FTIR_result_a1 == "Other" & 
+                                    bass_nested$Type == "Belief"], bass_nested$Total[bass_nested$FTIR_result_a1 == "Other" & 
+                                    bass_nested$Type == "Actual"]), n = c(nrow(bass_Other), nrow(bass_Other)))
+
+## Since p-cal < 0.05. We reject Ho and conclude that there is a significant difference between the proportion of Other belief and actual
+
+prop.test(x = c(bass_nested$Total[bass_nested$FTIR_result_a1 == "Unknown" & 
+                                    bass_nested$Type == "Belief"], bass_nested$Total[bass_nested$FTIR_result_a1 == "Unknown" & 
+                                    bass_nested$Type == "Actual"]), n = c(nrow(bass_Unknown), nrow(bass_Unknown)))
+
+## Since p-cal < 0.05. We reject Ho and conclude that there is a significant difference between the proportion of Unknown belief and actual
+```
+
+
+```{r}
+##----- Correcting Spelling Errors in Others column -----##
+bass1 <- bass
+
+bass$FTIR_result_7_detail1 <- ifelse(bass$FTIR_result_7_detail1 == "caffeine" | bass$FTIR_result_7_detail1 == "caffiene 78%", "caffiene", 
+                                     ifelse(bass$FTIR_result_7_detail1 == "flour/starch", "flour",bass$FTIR_result_7_detail1))
+
+bass$FTIR_result_7_detail2 <- ifelse(bass$FTIR_result_7_detail2 == "caffeine", "caffiene",
+                                     ifelse(bass$FTIR_result_7_detail2 == "mannitol or sugar", "mannitol",
+                                            ifelse(bass$FTIR_result_7_detail2 == "microcrystalline cellulose" | bass$FTIR_result_7_detail2 == "CELLULOSE", "cellulose", 
+                                                   ifelse(bass$FTIR_result_7_detail2 == "creatin", "creatine",
+                                                          ifelse(bass$FTIR_result_7_detail2 == "Procaine", "procaine",
+                                                                 ifelse(bass$FTIR_result_7_detail2 == "potential water", "water",
+                                                                        ifelse(bass$FTIR_result_7_detail2 == "sucrose potential", "sucrose",
+                                                                               ifelse(bass$FTIR_result_7_detail2 == "phenacitin" | bass$FTIR_result_7_detail2 == "Phenacetin", "phenacetin",
+                                                                                      ifelse(bass$FTIR_result_7_detail2 == "dimethyl sulphone" | bass$FTIR_result_7_detail2 == "dimethyl sulfone"  | bass$FTIR_result_7_detail2 == "dimethyl suphone", "dimethylfone",
+                                                                                             ifelse(bass$FTIR_result_7_detail2 == "fentanyl 11%" | bass$FTIR_result_7_detail2 == "fentanyl or analgue", "fentanyl", 
+                                                                                                    ifelse(bass$FTIR_result_7_detail2 == "insoitol", "inositol",
+                                                                                                           ifelse(bass$FTIR_result_7_detail2 == "uncertain carbohydrate" | bass$FTIR_result_7_detail2 == "carbohydrate (undifferentiated)", "carbohydrate",
+                                                                                                                  ifelse(bass$FTIR_result_7_detail2 == "tryptophan (uncertain)", "tryptophan",bass$FTIR_result_7_detail2)))))))))))))
+
+
+bass$FTIR_result_7_detail3 <- ifelse(bass$FTIR_result_7_detail3 == "microcrystalline cellulose", "cellulose", 
+                                     ifelse(bass$FTIR_result_7_detail3 == "talc (uncertain ID)", "talc",
+                                            ifelse(bass$FTIR_result_7_detail3 == "caffeine", "caffiene",
+                                                   ifelse(bass$FTIR_result_7_detail3 == "fatty acid (likely magnesium stearate)", "fatty acid", bass$FTIR_result_7_detail3))))
+
+```
+
+
+```{r}
+##----- Data for Sunburst viz -----##
+bass$Test_For_sunburst <- ifelse(bass$Testing_Self == 0 & (bass$Testing_Friends == 0 | bass$Testing_Clients == 0 | bass$Testing_Other == 0), "Both", 
+                                 ifelse(bass$Testing_Self == 0, "Self", "Others"))
+
+bass_sunburst <- bass[,c("PreviousDC", "Gender", "Obtained", "match2", "Surprised1","combo_name", "Test_For_sunburst", "Intention")]
+bass_sunburst$PreviousDC <- ifelse(bass_sunburst$PreviousDC == 0, "Yes", "No")
+bass_sunburst$Surprised1 <- ifelse(bass_sunburst$Surprised1 == 0, "Yes", "No")
+#write.csv(bass_sunburst, "D:\\UBC Assignments\\Previous Projects\\Data for students\\BassCoast_sunburst.csv", row.names = F)
+```
+
+
+```{r}
+##----- Creating Data for Sankey Diagram -----##
+bass_sankey <- bass1[,c("FTIR_result_a1", "LSD_result", "FTIR_result_a2", "FTIR_result_a3", "FTIR_result_7_detail1", "FTIR_result_7_detail2", "FTIR_result_7_detail3")]
+bass_sankey$FTIR_result_a1 <- ifelse(bass_sankey$LSD_result == 0, 6, bass_sankey$FTIR_result_a1)
+bass_sankey$FTIR_result_a1[is.na(bass_sankey$FTIR_result_a1)] <- 8
+
+bass_sankey$FTIR_result_a1 <- ifelse(bass_sankey$FTIR_result_a1 == 1, "MDMA",
+                                     ifelse(bass_sankey$FTIR_result_a1 == 2, "MDA",
+                                     ifelse(bass_sankey$FTIR_result_a1 == 3, "Ketamine",
+                                     ifelse(bass_sankey$FTIR_result_a1 == 4, "Cocaine",
+                                     ifelse(bass_sankey$FTIR_result_a1 == 5, "Meth",
+                                     ifelse(bass_sankey$FTIR_result_a1 == 6, "LSD",
+                                     ifelse(bass_sankey$FTIR_result_a1 == 7, "Other", "Unknown"
+                                     )))))))
+
+bass_sankey$FTIR_result_a2[is.na(bass_sankey$FTIR_result_a2)] <- "none"
+bass_sankey$FTIR_result_a2 <- ifelse(bass_sankey$FTIR_result_a2 == 1, "MDMA",
+                                     ifelse(bass_sankey$FTIR_result_a2 == 2, "MDA",
+                                     ifelse(bass_sankey$FTIR_result_a2 == 3, "Ketamine",
+                                     ifelse(bass_sankey$FTIR_result_a2 == 4, "Cocaine",
+                                     ifelse(bass_sankey$FTIR_result_a2 == 5, "Meth",
+                                     ifelse(bass_sankey$FTIR_result_a2 == 6, "LSD",
+                                     ifelse(bass_sankey$FTIR_result_a2 == 7, "Other",
+                                     ifelse(bass_sankey$FTIR_result_a2 == 8 | bass_sankey$FTIR_result_a2 == 9, "Unknown", bass_sankey$FTIR_result_a2
+                                     ))))))))
+
+bass_sankey$FTIR_result_a3[is.na(bass_sankey$FTIR_result_a3)] <- "Pure"
+bass_sankey$FTIR_result_a3 <- ifelse(bass_sankey$FTIR_result_a3 == 1, "MDMA",
+                                     ifelse(bass_sankey$FTIR_result_a3 == 2, "MDA",
+                                     ifelse(bass_sankey$FTIR_result_a3 == 3, "Ketamine",
+                                     ifelse(bass_sankey$FTIR_result_a3 == 4, "Cocaine",
+                                     ifelse(bass_sankey$FTIR_result_a3 == 5, "Meth",
+                                     ifelse(bass_sankey$FTIR_result_a3 == 6, "LSD",
+                                     ifelse(bass_sankey$FTIR_result_a3 == 7, "Other",
+                                     ifelse(bass_sankey$FTIR_result_a3 == 8, "Unknown", bass_sankey$FTIR_result_a3
+                                     ))))))))
+
+bass_sankey$LSD_result <- NULL 
+bass_sankey <- bass_sankey[!is.na(bass_sankey$FTIR_result_7_detail2),]
+bass_sankey <- bass_sankey[bass_sankey$FTIR_result_a1 != "Other",]
+bass_sankey$FTIR_result_7_detail1 <- NULL
+colnames(bass_sankey) <- c("Primary", "Secondary", "Tertiary", "Other2", "Other3")
+agg <- bass_sankey %>% group_by(Primary, Secondary) %>% count(Other2, sort = TRUE, name = "count")
+colnames(agg)[colnames(agg) == "Other2"] <- "Target"
+
+g1 <- bass_sankey %>% group_by(Primary, Secondary) %>% count(Tertiary, sort = TRUE, name = "Total")
+
+g2 <- bass_sankey %>% group_by(Primary) %>% count(Secondary, sort = TRUE, name = "Total")
+
+colnames(g1) <- c("Primary", "Secondary", "Tertiary", "Total")
+colnames(g2) <- c("Primary", "Secondary", "Total1")
+
+g3 <- left_join(g2, g1)
+g3$Total <- ifelse(g3$Total1 == g3$Total, 0, g3$Total)
+
+g4 <- g3
+g4$Primary <- ifelse(g4$Primary == "MDMA", 0,
+                     ifelse(g4$Primary == "MDA", 1,
+                     ifelse(g4$Primary == "Ketamine", 2,
+                     ifelse(g4$Primary == "Cocaine", 3,
+                     ifelse(g4$Primary == "Meth", 4,
+                     ifelse(g4$Primary == "LSD", 5,
+                     ifelse(g4$Primary == "Other", 6,
+                     ifelse(g4$Primary == "Unknown", 7,8
+                     ))))))))
+
+g4$Secondary <- ifelse(g4$Secondary == "MDMA", 0,
+                     ifelse(g4$Secondary == "MDA", 1,
+                     ifelse(g4$Secondary == "Ketamine", 2,
+                     ifelse(g4$Secondary == "Cocaine", 3,
+                     ifelse(g4$Secondary == "Meth", 4,
+                     ifelse(g4$Secondary == "LSD", 5,
+                     ifelse(g4$Secondary == "Other", 6,
+                     ifelse(g4$Secondary == "Unknown", 7, g4$Primary
+                     ))))))))
+
+g4$Tertiary <- ifelse(g4$Tertiary == "MDMA", 0,
+                     ifelse(g4$Tertiary == "MDA", 1,
+                     ifelse(g4$Tertiary == "Ketamine", 2,
+                     ifelse(g4$Tertiary == "Cocaine", 3,
+                     ifelse(g4$Tertiary == "Meth", 4,
+                     ifelse(g4$Tertiary == "LSD", 5,
+                     ifelse(g4$Tertiary == "Other", 6,
+                     ifelse(g4$Tertiary == "Unknown", 7, g4$Primary
+                     ))))))))
+
+#write.csv(agg, "D:\\UBC Assignments\\Previous Projects\\Data for students\\bassSankey.csv", row.names = F)
+
+```

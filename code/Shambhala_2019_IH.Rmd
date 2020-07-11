@@ -1,0 +1,915 @@
+---
+title: "Shambhala 2019- Consent"
+author: "Binal Patel"
+date: "5/8/2020"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(ggplot2)
+library(sqldf)
+if(!require(dplyr)){install.packages("dplyr")};require(dplyr)
+if(!require(tidyverse)){install.packages("tidyverse")};require(tidyverse)
+```
+
+
+### Importing data with columns combining Beliefs, FTIR 
+
+Using python extra columns were added to the Cleaned (Without Duplicate UniqueCode) Shambhala 2019 file. The extra columns: All_belief_a	No_of_belief_a	All_belief_b	All_belief_c	No_of_belief_b	No_of_belief_c	Identified_FTIR_A	Identified_FTIR_a1	Identified_FTIR_B	Identified_FTIR_b1	Identified_FTIR_C	Identified_FTIR_c1	FTIR_Drug_names_A	FTIR_Drug_names_A1	FTIR_Drug_names_B	FTIR_Drug_names_B1	FTIR_Drug_names_C	FTIR_Drug_names_C1	No_of_poly_FTIR_A	No_of_poly_FTIR_B	No_of_poly_FTIR_C	belief_a	belief_b	belief_c	matchornotA	matchornotA1	matchornotB	matchornotB1	matchornotC	matchornotC1
+
+These columns were created by merging all the beliefs, FTIRs individually in one columu, to make it easy to interpret (Each column is defined in the python file). The python code will be attached in the folder. The final csv produced using python is shambhala2019_final.csv
+
+```{r}
+
+library (readr)
+
+#sh_py = "https://raw.githubusercontent.com/datascienceforsocialgood/HarmReduction/master/shambhala2019_final.csv"
+
+sh_py <- read_csv("200711shambhala2019_final.csv")
+#sh_py <- read_csv(url(sh_py), col_names = T)
+```
+
+
+Reusing Akash's code to create individual columns for Gender, Obtained, Behaviour Change, Surprised
+
+```{r}
+
+#CHANGING sh_py$X1nbinary  IN CSV
+sh_py$Gender <- ifelse(sh_py$Female == 0, "Female", 
+                      ifelse(sh_py$Male == 0, "Male",
+                             ifelse(sh_py$X1nbinary == 0, "Nonbinary",
+                                    ifelse(sh_py$Trans == 0, "Trams",
+                                    ifelse(sh_py$Gender_Unk1wn == 0, "Unknown","none")))))
+
+sh_py$Obtained_sample_A <- ifelse(sh_py$Obtained_a == 0, "Onsite",
+                        ifelse(sh_py$Obtained_a == 1, "Offsite",
+                               ifelse(sh_py$Obtained_a == 2, "Online",
+                                      ifelse(sh_py$Obtained_a == 3, "Ground",
+                                             ifelse(sh_py$Obtained_a == 4, "Medical","Security")))))
+
+sh_py$Obtained_sample_B <- ifelse(sh_py$Obtained_b == 0, "Onsite",
+                        ifelse(sh_py$Obtained_b == 1, "Offsite",
+                               ifelse(sh_py$Obtained_b == 2, "Online",
+                                      ifelse(sh_py$Obtained_b == 3, "Ground",
+                                             ifelse(sh_py$Obtained_b == 4, "Medical","Security")))))
+
+sh_py$Obtained_sample_C <- ifelse(sh_py$Obtained_c == 0, "Onsite",
+                        ifelse(sh_py$Obtained_c == 1, "Offsite",
+                               ifelse(sh_py$Obtained_c == 2, "Online",
+                                      ifelse(sh_py$Obtained_c == 3, "Ground",
+                                             ifelse(sh_py$Obtained_c == 4, "Medical","Security")))))
+
+
+sh_py$Intention_count_A <- apply(sh_py[,c("Intention_1change_a", 
+                                      "Intention_More_a", 
+                                      "Intention_Less_a",
+                                      "Intention_Dispose_a",
+                                      "Intention_Friend_a",
+                                      "Intention_Change_a",
+                                      "Intention_Naloxone_a",
+                                      "Intention_Other_a")], 1, function(x){8-sum(x)})
+
+
+##----- Creating a column of intention as either Harm Reduction or no Harm Reduction -----##
+sh_py$Intention_group_A <- ifelse(sh_py$Intention_Dispose_a == 0 | sh_py$Intention_Friend_a == 0 |
+                                 sh_py$Intention_Change_a == 0 | sh_py$Intention_Less_a == 0 |
+                                 sh_py$Intention_Naloxone_a == 0, "Harm Reduction",
+                               "No Change")
+sh_py$Behaviour_change <- ifelse(sh_py$Intention_1change_a == 0, "No Change", "Behaviour Change")
+
+
+
+##----- Creating a column of intention as either Harm Reduction or no Harm Reduction -----##
+sh_py$Intention_group_A <- ifelse(sh_py$Intention_Dispose_a == 0 | sh_py$Intention_Friend_a == 0 |
+                                 sh_py$Intention_Change_a == 0 | sh_py$Intention_Less_a == 0 |
+                                 sh_py$Intention_Naloxone_a == 0, "Harm Reduction",
+                               "No Change")
+sh_py$Behaviour_change_A<- ifelse(sh_py$Intention_1change_a == 0, "No Change", "Behaviour Change")
+
+
+
+##----- Creating a column of intention as either Harm Reduction or no Harm Reduction -----##
+sh_py$Intention_group_B <- ifelse(sh_py$Intention_Dispose_b == 0 | sh_py$Intention_Friend_b == 0 |
+                                 sh_py$Intention_Change_b == 0 | sh_py$Intention_Less_b == 0 |
+                                 sh_py$Intention_Naloxone_b == 0, "Harm Reduction",
+                               "No Change")
+sh_py$Behaviour_change_B <- ifelse(sh_py$Intention_1change_b == 0, "No Change", "Behaviour Change")
+
+
+##----- Creating a column of intention as either Harm Reduction or no Harm Reduction -----##
+sh_py$Intention_group_C <- ifelse(sh_py$Intention_Dispose_c == 0 | sh_py$Intention_Friend_c == 0 |
+                                 sh_py$Intention_Change_c == 0 | sh_py$Intention_Less_c == 0 |
+                                 sh_py$Intention_Naloxone_c == 0, "Harm Reduction", "No Change")
+
+sh_py$Behaviour_change_C <- ifelse(sh_py$Intention_1change_c == 0, "No Change", "Behaviour Change")
+
+Intention_change_a<-as.data.frame(sh_py$Intention_group_A)
+names(Intention_change_a)[1]<-"HarmRed_NoHarmRed"
+Intention_change_b<-as.data.frame(sh_py$Intention_group_B)
+names(Intention_change_b)[1]<-"HarmRed_NoHarmRed"
+Intention_change_c<-as.data.frame(sh_py$Intention_group_C)
+names(Intention_change_c)[1]<-"HarmRed_NoHarmRed"
+
+#HarmReduction or Not
+ALL_Intention_Change<-rbind(Intention_change_a,Intention_change_b,Intention_change_c)
+
+#Behaviour Change
+Behaviour_change_a<-as.data.frame(sh_py$Behaviour_change_A)
+names(Behaviour_change_a)[1]<-"BehChange_NoChange"
+Behaviour_change_b<-as.data.frame(sh_py$Behaviour_change_B)
+names(Behaviour_change_b)[1]<-"BehChange_NoChange"
+Behaviour_change_c<-as.data.frame(sh_py$Behaviour_change_C)
+names(Behaviour_change_c)[1]<-"BehChange_NoChange"
+
+#BehaviourChange or Not
+ALL_Behaviour_Change<-rbind(Behaviour_change_a,Behaviour_change_b,Behaviour_change_c)
+
+BehaviourChange_HarmRed<-cbind(ALL_Intention_Change,ALL_Behaviour_Change)
+
+sur_a2<-as.data.frame(sh_py$Surprised_a)
+names(sur_a2)[1]<-"Surprised"
+sur_b2<-as.data.frame(sh_py$Surprised_b)
+names(sur_b2)[1]<-"Surprised"
+sur_c2<-as.data.frame(sh_py$Surprised_c)
+names(sur_c2)[1]<-"Surprised"
+
+Surprised2<-rbind(sur_a2,sur_b2,sur_c2)
+
+beh_harm_surp<-cbind(ALL_Intention_Change,ALL_Behaviour_Change,Surprised2)
+colnames(beh_harm_surp) <- c("HarmReduction", "BehaviourChange","Surprised")
+
+```
+
+
+# Service Users
+
+●	How many festival attendees access the drug checking service? 
+
+Importing new csv file with grouped by 'UniqueCode' column. (IH wanted us to calculate how many sample(s) did 1 person bring. 1 person could have more than 1 survey. Multiple surveys per individual were relabelled to single label (e.g: 2002-A,2002-B,2002-C was relabelled to 2002-A, later it will be grouped** together to concatanate the beliefs and FTIR results)
+
+```{r}
+
+sham_grouped = "https://raw.githubusercontent.com/datascienceforsocialgood/HarmReduction/master/shambhala2019_final_grouped.csv"
+sham_grouped<-read.csv(sham_grouped)
+sham_grouped<-sqldf("select * from sham_grouped group by UniqueCode") #grouped here**
+print(paste("Number of attendees access the drug checking service:", nrow(sham_grouped)))
+```
+
+
+●	How many had have used drug checking  services before?
+
+```{r}
+library(scales)
+ggplot(sh_py[!is.na(sh_py$PreviousDC),], aes(x = factor(PreviousDC),fill = PreviousDC)) + geom_bar(stat="count")+ggtitle("Previous Drug Checking")+ylab("Count")+xlab("Class")
+
+```
+
+
+●	What gender(s) do they identify with?
+
+```{r}
+
+gender_df<-as.data.frame(table(sh_py['Gender']))
+gender_df <- gender_df[-c(4), ] #removed none entry
+
+#COMMMENT ME OUT!
+write.csv(gender_df,"gender_sham19.csv")
+ggplot(gender_df, aes(x = factor(Var1),y=Freq/sum(Freq),fill=Var1)) +ggtitle("Gender: Shambhala 2019")+geom_bar(stat = "identity")+ylab("Rate")+xlab("Gender")
+```
+
+●	Where do service users say they have obtained the substances? (ie., Onsite, Offsite, Ground Find,  Medical, Security)
+
+```{r}
+all_obtained_a<-as.data.frame(sh_py$Obtained_sample_A)
+names(all_obtained_a)[1]<-"Obtained"
+all_obtained_b<-as.data.frame(sh_py$Obtained_sample_B)
+names(all_obtained_b)[1]<-"Obtained"
+all_obtained_c<-as.data.frame(sh_py$Obtained_sample_C)
+names(all_obtained_c)[1]<-"Obtained"
+
+all_obtained_all<-rbind(all_obtained_a,all_obtained_b,all_obtained_c)
+all_obtained<-as.data.frame(table(all_obtained_all['Obtained']))
+
+ggplot(all_obtained, aes(x = factor(Var1),y=Freq/sum(Freq),fill=Var1)) +ggtitle("Obtained at Shambhala 2019")+geom_bar(stat = "identity")+ylab("Rate")+xlab("Location")
+
+# COMMENT ME OUT
+write.csv(all_obtained,"Sham_obtained.csv")
+```
+
+●	Who are they testing for?
+
+Since the service user could test for both (self and friend), in the csv file when Testing_Friends=0 could conflict with Testing_Self, I change Testing_Friends=2 (for all the 0s)
+
+```{r}
+library(dplyr)
+sham19_testing_for <- sh_py %>% dplyr::summarise(Self_tot = sum(Testing_Self==0), Friends_tot = sum(Testing_Friends==2), 
+                               Clients_tot = sum(Testing_Clients==0), Other_tot = sum(Testing_Other==0)) %>% 
+  gather(key = "Testing_For", value = "Total")
+
+ggplot(sham19_testing_for, aes(x = factor(Testing_For), y = Total / sum(Total), fill = Testing_For)) +  geom_bar(stat="identity") +ggtitle("Testing For") +ylab("Total")+xlab("Class")+ylab("Rate")+xlab("Testing For")
+
+```
+
+# Substances
+
+Combining SU samples (If more than 1 survey entry) (Grouping UniqueCode)
+
+In "shambhala2019_final_grouped.csv" I have relabelled all the UniqueCode with multiple testing episodes (2002-A,2002-B,2002-C) to a single UniqueCode (2002-A). So I can group by in later.
+
+```{r}
+library(tidyr) 
+df<-read.csv("https://raw.githubusercontent.com/datascienceforsocialgood/HarmReduction/master/shambhala2019_final_grouped.csv")
+df<-sqldf("select * from df where UniqueCode<>''") #Since there are missing UniqueCode, I am exclusing those
+
+```
+
+
+●	When service users bring more than one substance to get checked, what combinations of drugs are they bringing (looking at the 2019 data only)?
+
+Here I am concatenating all the samples 1 person could have brought to get checked, instead of only sample A,B,C.
+```{r}
+#What combination of drugs are SU bringing
+
+beliefs_name<-sqldf("SELECT UniqueCode,GROUP_CONCAT(No_of_belief_a) AS belief_count_A, GROUP_CONCAT(No_of_belief_b) AS belief_count_B,GROUP_CONCAT(No_of_belief_c) AS belief_count_C,GROUP_CONCAT(belief_a) AS belief_A, GROUP_CONCAT(belief_b) AS belief_B,GROUP_CONCAT(belief_c) AS belief_C FROM df GROUP BY UniqueCode")
+
+beliefs_name$SU_beliefs = paste(beliefs_name$belief_A, beliefs_name$belief_B, beliefs_name$belief_C)
+beliefs_name$SU_beliefs_count = paste(beliefs_name$belief_count_A, beliefs_name$belief_count_B, beliefs_name$belief_count_C)
+beliefs_name$number.of.1 <- str_count(beliefs_name$SU_beliefs_count, "1")
+
+head(beliefs_name)
+
+```
+
+```{r}
+
+su_all_beliefs<-sqldf("select SU_beliefs,count(SU_beliefs) from beliefs_name group by SU_beliefs ") #309 combinations
+
+```
+
+Top 10 Multi-Samples that SU are Bringing: Shambhala 2019
+
+```{r}
+beliefs_new<-read.csv("https://raw.githubusercontent.com/datascienceforsocialgood/HarmReduction/master/Sham19_SU_top10beliefs_Morethan1.csv")
+top10belief_CSV<-as.data.frame(sqldf("select * from beliefs_new order by count desc LIMIT 10")) 
+colnames(top10belief_CSV)<-c("Sample_belief","count")
+write.csv(top10belief_CSV,"topbeliefs.csv")
+
+ggplot(top10belief_CSV, aes(x = factor(top10belief_CSV$Sample_belief), y = top10belief_CSV$count / sum(top10belief_CSV$count), fill = Sample_belief)) +  geom_bar(stat="identity") +ggtitle("Top 10 Multi-Samples that SU are Bringing: Shambhala 2019") +ylab("Total")+xlab("Class")+ylab("Rate")+xlab("Sample")+theme(axis.text.x = element_text(angle = 90, hjust =0))+ylab("Rate")+xlab("Substances")+ theme(plot.title = element_text(size=12))
+```
+
+
+
+Multiple tests, one SU:
+- How many bring more than one sample?
+
+```{r}
+morethan1belief<-sqldf("select * from beliefs_name where `number.of.1`>'1'") #815
+
+#Top 10 SU with the most substances
+morethan1belief_df<-as.data.frame(sqldf("select SU_beliefs as Samples,`number.of.1`as count from morethan1belief order by `number.of.1` desc LIMIT 10"))
+
+head(morethan1belief_df)
+```
+
+
+- How many do they bring? Do they form a distribution?
+
+```{r}
+
+SU_sample_count<-as.data.frame(sqldf("select * from beliefs_name where `number.of.1`>0"))
+
+hist(SU_sample_count$number.of.1, freq=FALSE, col="gray", xlab="Number of Samples", main="How many samples do SU bring")
+curve(dnorm(x, mean=mean(SU_sample_count$number.of.1), sd=sd(SU_sample_count$number.of.1)),add=TRUE) #line
+
+ggplot(SU_sample_count, aes(x=SU_sample_count$number.of.1)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="white")+
+ geom_density(alpha=.2, fill="#FF6666")
+
+```
+
+
+●	What do service users believe their substance is? 
+
+
+```{r}
+#Combining Beleif_*_a,Beleif_*_b,Beleif_*_c into one column
+sham_substance_belief_a <- sh_py %>% dplyr::summarise(blf_MDMA = sum(Belief_MDMA_a==0), blf_MDA = sum(Belief_MDA_a==0), 
+                          blf_Ketamine = sum(Belief_Ketamine_a==0), blf_Cocaine = sum(Belief_Cocaine_a==0), 
+                          blf_Meth = sum(Belief_Methamphetamine_a==0), blf_LSD = sum(Belief_LSD_a==0),
+                          blf_Unknown = sum(Belief_Unk1wn_a==0), blf_Other = sum(Belief_Other_a==0)) %>% 
+  gather(key = "Substance_Believed1", value = "Total")
+sham_substance_belief_b <- sh_py %>% dplyr::summarise(blf_MDMA = sum(Belief_MDMA_b==0), blf_MDA = sum(Belief_MDA_b==0), 
+                          blf_Ketamine = sum(Belief_Ketamine_b==0), blf_Cocaine = sum(Belief_Cocaine_b==0), 
+                          blf_Meth = sum(Belief_Methamphetamine_b==0), blf_LSD = sum(Belief_LSD_b==0),
+                          blf_Unknown = sum(Belief_Unk1wn_b==0), blf_Other = sum(Belief_Other_b==0)) %>% 
+  gather(key = "Substance_Believed1", value = "Total")
+
+sham_substance_belief_c <- sh_py %>% dplyr::summarise(blf_MDMA = sum(Belief_MDMA_c==0), blf_MDA = sum(Belief_MDA_c==0), 
+                          blf_Ketamine = sum(Belief_Ketamine_c==0), blf_Cocaine = sum(Belief_Cocaine_c==0), 
+                          blf_Meth = sum(Belief_Methamphetamine_c==0), blf_LSD = sum(Belief_LSD_c==0),
+                          blf_Unknown = sum(Belief_Unk1wn_c==0), blf_Other = sum(Belief_Other_c==0)) %>% 
+  gather(key = "Substance_Believed1", value = "Total")
+
+
+sham_substance_belief_a$Substance_BelievedB<-sham_substance_belief_b$Total
+sham_substance_belief_a$Substance_BelievedC<-sham_substance_belief_c$Total
+
+#Created a dataframe with count column for Beleif_*_a,Beleif_*_b,Beleif_*_c
+sham_substance_belief<-sqldf("select Substance_Believed1 as Substance_Believed, (Total+Substance_BelievedB+Substance_BelievedC) as BeliefCount from sham_substance_belief_a")
+
+ggplot(sham_substance_belief, aes(x = factor(Substance_Believed), y = BeliefCount/sum(BeliefCount), fill = Substance_Believed)) + geom_bar(stat = "identity")+xlab("Class")+ggtitle("Service User Belief")+theme(axis.text.x = element_text(angle = 90, hjust =0))+ylab("Rate")+xlab("Substances")
+
+
+```
+
+
+●	According to the checks, what do the drugs turn out to be?
+●	How frequently do the checks confirm the service user's expectation?
+
+Nested Belief and FTIR
+
+```{r}
+sh_MDMA <- sh_py[sh_py$Belief_MDMA_a == 0, c("Belief_MDMA_a", "FTIR_result_a1")]
+sh_belief_MDMA <- sh_MDMA %>% count(Belief_MDMA_a, sort = TRUE, name = "Actual")
+sh_actual_MDMA <- sh_MDMA %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 1)
+
+sh_MDA <- sh_py[sh_py$Belief_MDA_a == 0, c("Belief_MDA_a", "FTIR_result_a1")]
+sh_belief_MDA <- sh_MDA %>% count(Belief_MDA_a, sort = TRUE, name = "Actual")
+sh_actual_MDA <- sh_MDA %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 2)
+
+
+sh_Ketamine <- sh_py[sh_py$Belief_Ketamine_a == 0, c("Belief_Ketamine_a", "FTIR_result_a1")]
+sh_belief_ketamine <- sh_Ketamine %>% count(Belief_Ketamine_a, sort = TRUE, name = "Actual")
+sh_actual_ketamine <- sh_Ketamine %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 3)
+
+
+sh_Cocaine <- sh_py[sh_py$Belief_Cocaine_a == 0, c("Belief_Cocaine_a", "FTIR_result_a1")]
+sh_belief_Cocaine <- sh_Cocaine %>% count(Belief_Cocaine_a, sort = TRUE, name = "Actual")
+sh_actual_Cocaine <- sh_Cocaine %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 4)
+
+sh_Methamphetamine <- sh_py[sh_py$Belief_Methamphetamine_a == 0, c("Belief_Methamphetamine_a", "FTIR_result_a1")]
+sh_belief_Methamphetamine <- sh_Methamphetamine %>% count(Belief_Methamphetamine_a, sort = TRUE, name = "Actual")
+sh_actual_Methamphetamine <- sh_Methamphetamine %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 5)
+
+sh_LSD <- sh_py[sh_py$Belief_LSD_a == 0, c("Belief_LSD_a", "Erlich_result_a")]
+sh_belief_LSD <- sh_LSD %>% count(Belief_LSD_a, sort = TRUE, name = "Actual")
+sh_actual_LSD <- sh_LSD %>% count(Erlich_result_a, sort = TRUE, name = "Actual") %>% filter(Erlich_result_a == 0)
+
+sh_Other <- sh_py[sh_py$Belief_Other_a == 0, c("Belief_Other_a", "FTIR_result_a1")]
+sh_belief_Other <- sh_Other %>% count(Belief_Other_a, sort = TRUE, name = "Actual")
+sh_actual_Other <- sh_Other %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 7)
+
+sh_Unknown <- sh_py[sh_py$Belief_Unk1wn_a == 0, c("Belief_Unk1wn_a", "FTIR_result_a1")]
+sh_belief_Unknown <- sh_Unknown %>% count(Belief_Unk1wn_a, sort = TRUE, name = "Actual")
+sh_actual_Unknown <- sh_Unknown %>% count(FTIR_result_a1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_a1 == 8)
+
+colnames(sh_actual_LSD) <- c("FTIR_result_a1", "Actual")
+sh_nested_actual <- rbind(sh_actual_MDMA, sh_actual_MDA, sh_actual_ketamine, sh_actual_Cocaine,
+                            sh_actual_Methamphetamine, sh_actual_LSD, sh_actual_Other, sh_actual_Unknown)
+
+sh_belief_MDMA$Belief_MDMA_a <- 1
+sh_belief_MDA$Belief_MDA_a <- 2
+sh_belief_ketamine$Belief_Ketamine_a <- 3
+sh_belief_Cocaine$Belief_Cocaine_a <- 4
+sh_belief_Methamphetamine$Belief_Methamphetamine_a <- 5
+sh_belief_LSD$Belief_LSD_a <- 6
+sh_belief_Other$Belief_Other_a <- 7
+sh_belief_Unknown$Belief_Unk1wn_a <- 8
+colnames(sh_belief_MDMA) <- c("Belief_drug", "Belief")
+colnames(sh_belief_MDA) <- c("Belief_drug", "Belief")
+colnames(sh_belief_ketamine) <- c("Belief_drug", "Belief")
+colnames(sh_belief_Cocaine) <- c("Belief_drug", "Belief")
+colnames(sh_belief_Methamphetamine) <- c("Belief_drug", "Belief")
+colnames(sh_belief_LSD) <- c("Belief_drug", "Belief")
+colnames(sh_belief_Other) <- c("Belief_drug", "Belief")
+colnames(sh_belief_Unknown) <- c("Belief_drug", "Belief")
+sh_nested_belief <- rbind(sh_belief_MDMA, sh_belief_MDA, sh_belief_ketamine, sh_belief_Cocaine,
+                           sh_belief_Methamphetamine, sh_belief_LSD, sh_belief_Other, sh_belief_Unknown)
+
+sh_nested <- cbind(sh_nested_actual, sh_nested_belief)
+sh_nested <- sh_nested[, c("FTIR_result_a1", "Belief", "Actual")]
+sh_nested$FTIR_result_a1 <- ifelse(sh_nested$FTIR_result_a1 == 1, "MDMA",
+                                     ifelse(sh_nested$FTIR_result_a1 == 2, "MDA",
+                                     ifelse(sh_nested$FTIR_result_a1 == 3, "Ketamine",
+                                     ifelse(sh_nested$FTIR_result_a1 == 4, "Cocaine",
+                                     ifelse(sh_nested$FTIR_result_a1 == 5, "Methamphetamine",
+                                     ifelse(sh_nested$FTIR_result_a1 == 0, "LSD",
+                                     ifelse(sh_nested$FTIR_result_a1 == 7, "Other", "Unknown"
+                                     )))))))
+
+sh_nested_2<-gather(sh_nested, Type, Total, Belief:Actual)
+
+#COMMENT ME OUT
+write.csv(sh_nested_2,"shambhala_nested.csv")
+```
+
+
+```{r}
+sh_MDMA_b <- sh_py[sh_py$Belief_MDMA_b == 0, c("Belief_MDMA_b", "FTIR_result_b1")]
+sh_belief_MDMA_b <- sh_MDMA_b %>% count(Belief_MDMA_b, sort = TRUE, name = "Actual")
+sh_actual_MDMA_b <- sh_MDMA_b %>% count(FTIR_result_b1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_b1 == 1)
+sh_MDMA_c <- sh_py[sh_py$Belief_MDMA_c == 0, c("Belief_MDMA_c", "FTIR_result_c1")]
+sh_belief_MDMA_c <- sh_MDMA_c %>% count(Belief_MDMA_c, sort = TRUE, name = "Actual")
+sh_actual_MDMA_c <- sh_MDMA_c %>% count(FTIR_result_c1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_c1 == 1)
+
+sh_MDA_b <- sh_py[sh_py$Belief_MDA_b == 0, c("Belief_MDA_b", "FTIR_result_b1")]
+sh_belief_MDA_b <- sh_MDA_b %>% count(Belief_MDA_b, sort = TRUE, name = "Actual")
+sh_actual_MDA_b <- sh_MDA_b %>% count(FTIR_result_b1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_b1 == 2)
+
+sh_MDA_c <- sh_py[sh_py$Belief_MDA_c == 0, c("Belief_MDA_c", "FTIR_result_c1")]
+sh_belief_MDA_c <- sh_MDA_c %>% count(Belief_MDA_c, sort = TRUE, name = "Actual")
+sh_actual_MDA_c <- sh_MDA_c %>% count(FTIR_result_c1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_c1 == 2)
+
+
+sh_Ketamine_b <- sh_py[sh_py$Belief_Ketamine_b == 0, c("Belief_Ketamine_b", "FTIR_result_b1")]
+sh_belief_ketamine_b <- sh_Ketamine_b %>% count(Belief_Ketamine_b, sort = TRUE, name = "Actual")
+sh_actual_ketamine_b <- sh_Ketamine_b %>% count(FTIR_result_b1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_b1 == 3)
+
+sh_Ketamine_c <- sh_py[sh_py$Belief_Ketamine_c == 0, c("Belief_Ketamine_c", "FTIR_result_c1")]
+sh_belief_ketamine_c <- sh_Ketamine_c %>% count(Belief_Ketamine_c, sort = TRUE, name = "Actual")
+sh_actual_ketamine_c <- sh_Ketamine_c %>% count(FTIR_result_c1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_c1 == 3)
+
+
+sh_Cocaine_b <- sh_py[sh_py$Belief_Cocaine_b == 0, c("Belief_Cocaine_b", "FTIR_result_b1")]
+sh_belief_Cocaine_b <- sh_Cocaine_b %>% count(Belief_Cocaine_b, sort = TRUE, name = "Actual")
+sh_actual_Cocaine_b <- sh_Cocaine_b %>% count(FTIR_result_b1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_b1 == 4)
+
+sh_Cocaine_c <- sh_py[sh_py$Belief_Cocaine_c == 0, c("Belief_Cocaine_c", "FTIR_result_c1")]
+sh_belief_Cocaine_c <- sh_Cocaine_c %>% count(Belief_Cocaine_c, sort = TRUE, name = "Actual")
+sh_actual_Cocaine_c <- sh_Cocaine_c %>% count(FTIR_result_c1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_c1 == 4)
+
+sh_Methamphetamine_b <- sh_py[sh_py$Belief_Methamphetamine_b == 0, c("Belief_Methamphetamine_b", "FTIR_result_b1")]
+sh_belief_Methamphetamine_b <- sh_Methamphetamine_b %>% count(Belief_Methamphetamine_b, sort = TRUE, name = "Actual")
+sh_actual_Methamphetamine_b <- sh_Methamphetamine_b %>% count(FTIR_result_b1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_b1 == 5)
+
+#All the Belief_Methamphetamine_c are 1
+sh_Methamphetamine_c <- sh_py[sh_py$Belief_Methamphetamine_c == 0, c("Belief_Methamphetamine_c", "FTIR_result_c1")]
+sh_belief_Methamphetamine_c <- sh_Methamphetamine_c %>% count(Belief_Methamphetamine_c, sort = TRUE, name = "Actual")
+sh_actual_Methamphetamine_c <- sh_Methamphetamine_c %>% count(FTIR_result_c1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_c1 == 5)
+
+sh_LSD_b <- sh_py[sh_py$Belief_LSD_b == 0, c("Belief_LSD_b", "Ehrlich_result_b")]
+sh_belief_LSD_b <- sh_LSD_b %>% count(Belief_LSD_b, sort = TRUE, name = "Actual")
+sh_actual_LSD_b <- sh_LSD_b %>% count(Ehrlich_result_b, sort = TRUE, name = "Actual") %>% filter(Ehrlich_result_b == 0)
+
+sh_LSD_c <- sh_py[sh_py$Belief_LSD_c == 0, c("Belief_LSD_c", "Ehrlich_result_c")]
+sh_belief_LSD_c <- sh_LSD_c %>% count(Belief_LSD_c, sort = TRUE, name = "Actual")
+sh_actual_LSD_c <- sh_LSD_c %>% count(Ehrlich_result_c, sort = TRUE, name = "Actual") %>% filter(Ehrlich_result_c == 0)
+
+sh_Other_b <- sh_py[sh_py$Belief_Other_b == 0, c("Belief_Other_b", "FTIR_result_b1")]
+sh_belief_Other_b <- sh_Other_b %>% count(Belief_Other_b, sort = TRUE, name = "Actual")
+sh_actual_Other_b <- sh_Other_b %>% count(FTIR_result_b1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_b1 == 7)
+
+sh_Other_c <- sh_py[sh_py$Belief_Other_c == 0, c("Belief_Other_c", "FTIR_result_c1")]
+sh_belief_Other_c <- sh_Other_c %>% count(Belief_Other_c, sort = TRUE, name = "Actual")
+sh_actual_Other_c <- sh_Other_c %>% count(FTIR_result_c1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_c1 == 7)
+
+sh_Unknown_b <- sh_py[sh_py$Belief_Unk1wn_b == 0, c("Belief_Unk1wn_b", "FTIR_result_b1")]
+sh_belief_Unknown_b <- sh_Unknown_b %>% count(Belief_Unk1wn_b, sort = TRUE, name = "Actual")
+sh_actual_Unknown_b <- sh_Unknown_b %>% count(FTIR_result_b1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_b1 == 8)
+
+sh_Unknown_c <- sh_py[sh_py$Belief_Unk1wn_c == 0, c("Belief_Unk1wn_c", "FTIR_result_c1")]
+sh_belief_Unknown_c <- sh_Unknown_c %>% count(Belief_Unk1wn_c, sort = TRUE, name = "Actual")
+sh_actual_Unknown_c <- sh_Unknown_c %>% count(FTIR_result_c1, sort = TRUE, name = "Actual") %>% filter(FTIR_result_c1 == 8)
+
+colnames(sh_actual_MDA) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_MDA_b) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_MDA_c) <- c("FTIR_result_a1", "Actual")
+
+colnames(sh_actual_MDMA) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_MDMA_b) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_MDMA_c) <- c("FTIR_result_a1", "Actual")
+
+colnames(sh_actual_Cocaine) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_Cocaine_b) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_Cocaine_c) <- c("FTIR_result_a1", "Actual")
+
+colnames(sh_actual_ketamine) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_ketamine_b) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_ketamine_c) <- c("FTIR_result_a1", "Actual")
+
+colnames(sh_actual_LSD) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_LSD_b) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_LSD_c) <- c("FTIR_result_a1", "Actual")
+
+colnames(sh_actual_Methamphetamine) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_Methamphetamine_b) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_Methamphetamine_c) <- c("FTIR_result_a1", "Actual")
+
+colnames(sh_actual_Unknown) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_Unknown_b) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_Unknown_c) <- c("FTIR_result_a1", "Actual")
+
+colnames(sh_actual_Other) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_Other_b) <- c("FTIR_result_a1", "Actual")
+colnames(sh_actual_Other_c) <- c("FTIR_result_a1", "Actual")
+
+sh_nested_actual_b <- rbind(sh_actual_MDMA_b, sh_actual_MDA_b, sh_actual_ketamine_b, sh_actual_Cocaine_b,
+                            sh_actual_Methamphetamine_b, sh_actual_LSD_b, sh_actual_Other_b, sh_actual_Unknown_b)
+
+sh_nested_actual_c <- rbind(sh_actual_MDMA_c, sh_actual_MDA_c, sh_actual_ketamine_c, sh_actual_Cocaine_c,
+                            sh_actual_Methamphetamine_c, sh_actual_LSD_c, sh_actual_Other_c, sh_actual_Unknown_c)
+
+sh_belief_MDMA_b$Belief_MDMA_b <- 1
+sh_belief_MDMA_c$Belief_MDMA_c <- 1
+sh_belief_MDA_b$Belief_MDA_b <- 2
+sh_belief_MDA_c$Belief_MDA_c <- 2
+sh_belief_ketamine_b$Belief_Ketamine_b <- 3
+sh_belief_ketamine_c$Belief_Ketamine_c <- 3
+sh_belief_Cocaine_b$Belief_Cocaine_b <- 4
+sh_belief_Cocaine_c$Belief_Cocaine_c <- 4
+sh_belief_Methamphetamine_b$Belief_Methamphetamine_b <- 5
+#sh_belief_Methamphetamine_c[,1] <- 'NA'
+sh_belief_LSD_b$Belief_LSD_b <- 6
+sh_belief_LSD_c$Belief_LSD_c <- 6
+sh_belief_Other_b$Belief_Other_b <- 7
+sh_belief_Other_c$Belief_Other_c <- 7
+sh_belief_Unknown_b$Belief_Unk1wn_b <- 8
+sh_belief_Unknown_c$Belief_Unk1wn_c <- 8
+colnames(sh_belief_MDMA_b) <- c("Belief_drug", "Belief")
+colnames(sh_belief_MDA_b) <- c("Belief_drug", "Belief")
+colnames(sh_belief_ketamine_b) <- c("Belief_drug", "Belief")
+colnames(sh_belief_Cocaine_b) <- c("Belief_drug", "Belief")
+colnames(sh_belief_Methamphetamine_b) <- c("Belief_drug", "Belief")
+colnames(sh_belief_LSD_b) <- c("Belief_drug", "Belief")
+colnames(sh_belief_Other_b) <- c("Belief_drug", "Belief")
+colnames(sh_belief_Unknown_b) <- c("Belief_drug", "Belief")
+colnames(sh_belief_MDMA_c) <- c("Belief_drug", "Belief")
+colnames(sh_belief_MDA_c) <- c("Belief_drug", "Belief")
+colnames(sh_belief_ketamine_c) <- c("Belief_drug", "Belief")
+colnames(sh_belief_Cocaine_c) <- c("Belief_drug", "Belief")
+#colnames(sh_belief_Methamphetamine_c) <- c("Belief_drug", "Belief")
+colnames(sh_belief_LSD_c) <- c("Belief_drug", "Belief")
+colnames(sh_belief_Other_c) <- c("Belief_drug", "Belief")
+colnames(sh_belief_Unknown_c) <- c("Belief_drug", "Belief")
+sh_nested_belief_b <- rbind(sh_belief_MDMA_b, sh_belief_MDA_b, sh_belief_ketamine_b, sh_belief_Cocaine_b,
+                           sh_belief_Methamphetamine_b, sh_belief_LSD_b, sh_belief_Other_b, sh_belief_Unknown_b)
+sh_nested_belief_c <- rbind(sh_belief_MDMA_c, sh_belief_MDA_c, sh_belief_ketamine_c, sh_belief_Cocaine_c,
+                           sh_belief_Methamphetamine_c, sh_belief_LSD_c, sh_belief_Other_c, sh_belief_Unknown_c)
+
+sh_nested_b <- cbind(sh_nested_actual_b, sh_nested_belief_b)
+sh_nested_b <- sh_nested_b[, c("FTIR_result_a1", "Belief", "Actual")]
+sh_nested_b$FTIR_result_a1 <- ifelse(sh_nested_b$FTIR_result_a1 == 1, "MDMA",
+                                     ifelse(sh_nested_b$FTIR_result_a1 == 2, "MDA",
+                                     ifelse(sh_nested_b$FTIR_result_a1 == 3, "Ketamine",
+                                     ifelse(sh_nested_b$FTIR_result_a1 == 4, "Cocaine",
+                                     ifelse(sh_nested_b$FTIR_result_a1 == 5, "Methamphetamine",
+                                     ifelse(sh_nested_b$FTIR_result_a1 == 0, "LSD",
+                                     ifelse(sh_nested_b$FTIR_result_a1 == 7, "Other", "Unknown"
+                                     )))))))
+sh_nested_c <- cbind(sh_nested_actual_c, sh_nested_belief_c)
+sh_nested_c <- sh_nested_c[, c("FTIR_result_a1", "Belief", "Actual")]
+sh_nested_c$FTIR_result_a1 <- ifelse(sh_nested_c$FTIR_result_a1 == 1, "MDMA",
+                                     ifelse(sh_nested_c$FTIR_result_a1 == 2, "MDA",
+                                     ifelse(sh_nested_c$FTIR_result_a1 == 3, "Ketamine",
+                                     ifelse(sh_nested_c$FTIR_result_a1 == 4, "Cocaine",
+                                     ifelse(sh_nested_c$FTIR_result_a1 == 5, "Methamphetamine",
+                                     ifelse(sh_nested_c$FTIR_result_a1 == 0, "LSD",
+                                     ifelse(sh_nested_c$FTIR_result_a1 == 7, "Other", "Unknown"
+                                     )))))))
+
+sh_nested_2b<-gather(sh_nested_b, Type, Total, Belief:Actual)
+sh_nested_2c<-gather(sh_nested_c, Type, Total, Belief:Actual) #removed Meth since there were no meth beliefs
+
+all_sham_nested<-rbind(sh_nested_2,sh_nested_2b,sh_nested_2c)
+
+#COMMENT ME OUT AFTER WRITING
+write.csv(all_sham_nested,"all_sham19_nested.csv")
+
+nestesd_sham<-as.data.frame(sqldf("select *, sum(Total) from all_sham_nested group by FTIR_result_a1, Type"))
+write.csv(nestesd_sham,"shamm_nested.csv")
+```
+
+counting how many samples were tested
+```{r}
+ftira<-sqldf("select FTIR_Drug_names_A from sh_py")
+ftira<-as.data.frame(ftira)
+names(ftira)[1]<-"FTIRS"
+ftirb<-sqldf("select FTIR_Drug_names_B from sh_py")
+ftirb<-as.data.frame(ftirb)
+names(ftirb)[1]<-"FTIRS"
+ftirc<-sqldf("select FTIR_Drug_names_C from sh_py")
+ftirc<-as.data.frame(ftirc)
+names(ftirc)[1]<-"FTIRS"
+
+ftirs_abc_all<-rbind(ftira,ftirb,ftirc)
+#ftir_abc_all2<-sqldf("select * from ftirs_abc_all where FTIRS<>'[]'") #counting how many were tested= 2598
+```
+
+●	When multiple substances are found in one sample, what substances are found together?
+
+```{r}
+#FTIR with cut so No. of poly > 1
+
+FTIR_CUT_A<-as.data.frame(sqldf("select FTIR_Drug_names_A as Substances from sh_py where No_of_poly_FTIR_A >= 2"))
+FTIR_CUT_B<-as.data.frame(sqldf("select FTIR_Drug_names_B as Substances from sh_py where No_of_poly_FTIR_B >= 2"))
+FTIR_CUT_C<-as.data.frame(sqldf("select FTIR_Drug_names_C as Substances from sh_py where No_of_poly_FTIR_C >= 2"))
+
+FTIR_CUTS<-rbind(FTIR_CUT_A,FTIR_CUT_A,FTIR_CUT_A)
+sqldf("select *, count(Substances) from FTIR_CUTS group by Substances order by count(Substances) desc")
+
+#COMMENT ME OUT AFTER WRITING
+write.csv(FTIR_CUTS,"FTIR_CUT.csv")
+
+```
+
+What samples are some popular samples checked by FTIR 
+```{r}
+
+#making a df with how many substances the FTIR identified with them
+ftir_num<-sqldf("SELECT UniqueCode,GROUP_CONCAT(FTIR_Drug_names_A) AS A, GROUP_CONCAT(FTIR_Drug_names_B) AS B,GROUP_CONCAT(FTIR_Drug_names_C) AS C,GROUP_CONCAT(No_of_poly_FTIR_A) AS A1, GROUP_CONCAT(No_of_poly_FTIR_B) AS B1,GROUP_CONCAT(No_of_poly_FTIR_C) AS C1 FROM df GROUP BY UniqueCode")
+ftir_num$FTIR_substances = paste(ftir_num$A, ftir_num$B, ftir_num$C)
+ftir_num$FTIR_counts = paste(ftir_num$A1, ftir_num$B1, ftir_num$C1)
+
+ftir_num$count <- str_count(ftir_num$FTIR_counts, "1|2|3|4") #counting samples
+
+top10ftircombos<-as.data.frame(sqldf("select REPLACE(FTIR_substances,'[]','') as FTIR_Results_,count(FTIR_substances) as count_subs from ftir_num where count>1 group by FTIR_substances order by count(FTIR_substances) desc LIMIT 20")) 
+colnames(top10ftircombos)<-c("FTIR_Samples_Tested","Count")
+head(top10ftircombos)
+top10ftircombos_CSV<-as.data.frame(sqldf("select REPLACE(FTIR_substances,'[]','') as FTIR_Results_,count(FTIR_substances) as count_subs from ftir_num where count>1 group by FTIR_substances order by count(FTIR_substances) desc")) 
+
+#COMMENT ME OUT AFTER WRITING
+write.csv(top10ftircombos_CSV,"top10ftircombos.csv")
+
+```
+
+
+```{r}
+ftirs_new<-read.csv("https://raw.githubusercontent.com/datascienceforsocialgood/HarmReduction/master/top10ftircombos.csv")
+top10ftir_CSV<-as.data.frame(sqldf("select * from ftirs_new order by count desc LIMIT 10")) 
+
+ggplot(top10ftir_CSV, aes(x = factor(top10ftir_CSV$FTIR_Results_), y = top10ftir_CSV$count / sum(top10ftir_CSV$count), fill = FTIR_Results_)) +  geom_bar(stat="identity") +ggtitle("Top 10 Multi-Samples that SU got Checked: Shambhala 2019") +ylab("Total")+xlab("Class")+ylab("Rate")+xlab("Sample")+theme(axis.text.x = element_text(angle = 90, hjust =0))+ylab("Rate")+xlab("Substances")+ theme(plot.title = element_text(size=11))
+```
+
+
+FTIR Results- Testing on Self vs Testing on other (when they are bringing more than 1 sample)
+
+```{r}
+
+ftir_test_self_other<-sqldf("SELECT UniqueCode,GROUP_CONCAT(FTIR_Drug_names_A) AS A, GROUP_CONCAT(FTIR_Drug_names_B) AS B,GROUP_CONCAT(FTIR_Drug_names_C) AS C,GROUP_CONCAT(No_of_poly_FTIR_A) AS A1, GROUP_CONCAT(No_of_poly_FTIR_B) AS B1,GROUP_CONCAT(No_of_poly_FTIR_C) AS C1,Testing_Self,Testing_Other,Testing_Friends,Testing_Clients,Testing_Self_Friend FROM df GROUP BY UniqueCode")
+
+ftir_test_self_other$FTIR_substances = paste(ftir_test_self_other$A, ftir_test_self_other$B, ftir_test_self_other$C)
+ftir_test_self_other$FTIR_counts = paste(ftir_test_self_other$A1, ftir_test_self_other$B1, ftir_test_self_other$C1)
+
+ftir_test_self_other$count <- str_count(ftir_test_self_other$FTIR_counts, "1|2|3|4") #counting samples
+
+testing_self<-sqldf("Select REPLACE(FTIR_substances,'[]','') FTIR_Samples, count(FTIR_substances) as sample_count from ftir_test_self_other where count > 1 and Testing_Self==0 group by FTIR_substances order by count(FTIR_substances) desc LIMIT 10")
+
+testing_self_fren<-sqldf("Select REPLACE(FTIR_substances,'[]','') FTIR_Samples, count(FTIR_substances) as sample_count from ftir_test_self_other where count > 1 and Testing_Self_Friend==0 group by FTIR_substances order by count(FTIR_substances) desc LIMIT 10")
+
+testing_other<-sqldf("Select REPLACE(FTIR_substances,'[]','') FTIR_Samples, count(FTIR_substances) as sample_count from ftir_test_self_other where count > 1 and Testing_Other==0 group by FTIR_substances order by count(FTIR_substances) desc LIMIT 10")
+
+
+ggplot(testing_self, aes(x = factor(testing_self$FTIR_Samples), y = testing_self$sample_count / sum(testing_self$sample_count), fill = testing_self$FTIR_Samples)) +  geom_bar(stat="identity") +ggtitle("Testing for Self") +ylab("Total")+xlab("Class")+ylab("Rate")+xlab("Sample")+theme(axis.text.x = element_text(angle = 90, hjust =0))+ylab("Rate")+xlab("Substances")
+
+ggplot(testing_self_fren, aes(x = factor(testing_self_fren$FTIR_Samples), y = testing_self_fren$sample_count / sum(testing_self_fren$sample_count), fill = testing_self_fren$FTIR_Samples)) +  geom_bar(stat="identity") +ggtitle("Testing for Self and Friend") +ylab("Total")+xlab("Class")+ylab("Rate")+xlab("Sample")+theme(axis.text.x = element_text(angle = 90, hjust =0))+ylab("Rate")+xlab("Substances")
+
+ggplot(testing_other, aes(x = factor(testing_other$FTIR_Samples), y = testing_other$sample_count / sum(testing_other$sample_count), fill = testing_other$FTIR_Samples)) +  geom_bar(stat="identity") +ggtitle("Testing for Other") +ylab("Total")+xlab("Class")+ylab("Rate")+xlab("Sample")+theme(axis.text.x = element_text(angle = 90, hjust =0))+ylab("Rate")+xlab("Substances")
+
+
+
+```
+
+Association Table- FTIR Primary Substance vs Behaviour change and Surprised
+
+●	How frequently do they decide to do something different with the substance after having it checked
+
+○	Does this behaviour change depend on the type of substance expected and what it turns out to be? 
+
+○	Is this difference bigger when the drug turns out to be in a different category?
+
+```{r}
+
+ftira1<-sqldf("select FTIR_Drug_names_A1 from sh_py")
+ftira1<-as.data.frame(ftira1)
+names(ftira1)[1]<-"FTIR-Prim"
+ftirb1<-sqldf("select FTIR_Drug_names_B1 from sh_py")
+ftirb1<-as.data.frame(ftirb1)
+names(ftirb1)[1]<-"FTIR-Prim"
+ftirc1<-sqldf("select FTIR_Drug_names_C1 from sh_py")
+ftirc1<-as.data.frame(ftirc1)
+names(ftirc1)[1]<-"FTIR-Prim"
+
+ftir_all1<-rbind(ftira1,ftirb1,ftirc1) #total 4920 but after removing na it came down to 2911
+
+
+#creating df with behaviour and primary ftir substance
+primary_substance_surp_harm<-cbind(beh_harm_surp,ftir_all1)
+
+prop.table(table(primary_substance_surp_harm$`FTIR-Prim`,primary_substance_surp_harm$Surprised==0),1)
+sqldf("select `FTIR-Prim` ,count(`FTIR-Prim`), Surprised from primary_substance_surp_harm where `FTIR-Prim` LIKE '%MDMA%' group by Surprised")
+
+prop.table(table(primary_substance_surp_harm$`FTIR-Prim`,primary_substance_surp_harm$BehaviourChange=='Behaviour Change'),1)
+```
+
+
+# Substance predictions
+
+Belief and FTIR Frequency plot
+
+```{r}
+#Frequency of belief and FTIR
+
+all_ftir_a<-as.data.frame(sh_py$FTIR_Drug_names_A1)
+names(all_ftir_a)[1]<-"FTIR_1"
+all_ftir_b<-as.data.frame(sh_py$FTIR_Drug_names_B1)
+names(all_ftir_b)[1]<-"FTIR_1"
+all_ftir_c<-as.data.frame(sh_py$FTIR_Drug_names_C1)
+names(all_ftir_c)[1]<-"FTIR_1"
+
+all_ftir<-rbind(all_ftir_a,all_ftir_b,all_ftir_c)
+
+all_belief_a<-as.data.frame(sh_py$belief_a)
+names(all_belief_a)[1]<-"belief"
+all_belief_b<-as.data.frame(sh_py$belief_b)
+names(all_belief_b)[1]<-"belief"
+all_belief_c<-as.data.frame(sh_py$belief_c)
+names(all_belief_c)[1]<-"belief"
+
+all_belief<-rbind(all_belief_a,all_belief_b,all_belief_c)
+
+all_matchornot_a<-as.data.frame(sh_py$matchornotA1)
+names(all_matchornot_a)[1]<-"matchornotmatch"
+all_matchornot_b<-as.data.frame(sh_py$matchornotB1)
+names(all_matchornot_b)[1]<-"matchornotmatch"
+all_matchornot_c<-as.data.frame(sh_py$matchornotC1)
+names(all_matchornot_c)[1]<-"matchornotmatch"
+
+all_matchornot_prim<-rbind(all_matchornot_a,all_matchornot_b,all_matchornot_c) #primary
+
+#ALL (A,B,C) belief vs Primary FTIR Result Mismatch DF
+all_belief_ftir1<-cbind(all_ftir,all_belief,all_matchornot_prim)
+
+ggplot(all_belief_ftir1, aes(x = factor(all_belief_ftir1$FTIR_1), fill = all_belief_ftir1$matchornotmatch)) + geom_bar(stat = "count",position = "dodge",aes(y = (..count..)/sum(..count..)))+scale_y_continuous(labels = scales::percent)+ylab("Percent")+xlab("Substances")+ggtitle("Frequency of belief and Primary FTIR")
+
+
+# ggplot(all_belief_ftir1, aes(x = factor(all_belief_ftir1$matchornotmatch), fill = all_belief_ftir1$FTIR_1)) + geom_bar(stat = "count",position = "dodge",aes(y = (..count..)/sum(..count..)))+scale_y_continuous(labels = scales::percent)+ylab("Percent")+xlab("Class")+ggtitle("Service User Belief Match with Primary FTIR Result")
+```
+
+
+
+
+
+```{r}
+##----- Creating a column of intention as either Harm Reduction or no Harm Reduction -----##
+sqldf("select count(HarmReduction),HarmReduction from beh_harm_surp group by HarmReduction")
+
+## 22.29% respondents seem to be taking drugs in a safer manner
+
+sqldf("select count(BehaviourChange),BehaviourChange from beh_harm_surp group by BehaviourChange")
+
+## 23.38% respondents suggest some sort of behaviour change
+
+
+
+```
+
+
+
+● How frequently and when do service users report being surprised?
+
+```{r}
+length(beh_harm_surp$HarmReduction[beh_harm_surp$BehaviourChange == "Behaviour Change" & beh_harm_surp$Surprised == 0 
+                                   & !is.na(beh_harm_surp$Surprised)]) / 5085
+## 5.13% of respondents who were surprised suggested a Change in Behaviour
+
+length(beh_harm_surp$HarmReduction[beh_harm_surp$HarmReduction == "Harm Reduction" & 
+                              beh_harm_surp$BehaviourChange == "Behaviour Change" & beh_harm_surp$Surprised == 0]) / 5085
+## 3.18% of respondents who were surprised by the results have a chane in Intention and will use safer mean
+
+sqldf("Select count(*) from beh_harm_surp where BehaviourChange=='Behaviour Change' and Surprised==0")
+
+```
+
+
+# Changes in behaviour
+
+
+```{r}
+
+match_beh<-cbind(all_matchornot_prim,Surprised2,ALL_Behaviour_Change,ALL_Intention_Change)
+
+ggplot(match_beh, aes(x=match_beh$matchornotmatch,fill=match_beh$BehChange_NoChange)) + 
+  geom_bar(stat = "count",position="dodge",aes(y = (..count..)/sum(..count..)))+theme(axis.text.x = element_text(angle = 90, hjust = 0.9))+ggtitle("Change in Behaviour after checking the substance")+ylab("Rate")+xlab("Match/No match")
+
+
+```
+
+
+○	How does this difference interact with how surprised the service user is? 
+
+```{r}
+supp.labs <- c("Surprised", "Not Surprised")
+ ggplot(match_beh, aes(match_beh$BehChange_NoChange, group =match_beh$Surprised)) + 
+          geom_bar(aes(y = ..prop.., fill = factor(..x..)), stat="count") +
+          ylab("relative frequencies") +
+          facet_grid(~Surprised,labeller = labeller(supp = supp.labs))+theme(axis.text.x = element_text(angle = 90, hjust = 0.9))+ggtitle("Surprised: Behaviour Change based on Match/Not Match")+ylab("Rate")+xlab("Behaviour")
+ 
+sqldf("select count(*) from match_beh where Surprised is null") #2203 Missing Entries
+
+```
+
+
+●	When they are surprised, how often does a service user discard the drug in the presence of the volunteer?
+
+```{r}
+#How many discared the sample: 41
+sqldf("select Discarded, count(Discarded),Surprised_a from sh_py where Discarded<>2 and Discarded<>'' group by Discarded")
+
+sqldf("select Discarded, count(Discarded),Surprised_a from sh_py where Discarded<>2 and Discarded is not null group by Surprised_a and Surprised_a is not null, Discarded")
+
+```
+
+● NEW wk3:  When they say they'll change behaviour, what are the likely behaviour change options?
+
+```{r}
+sham_intention_A <- sh_py %>% dplyr::summarise(NoChange = sum(Intention_1change_a==0), More = sum(Intention_More_a==0), 
+                          Less = sum(Intention_Less_a==0), Dispose = sum(Intention_Dispose_a==0), 
+                          Change = sum(Intention_Change_a==0), Friend = sum(Intention_Friend_a==0),
+                          Naloxone = sum(Intention_Naloxone_a==0), Other = sum(Intention_Other_a==0)) %>% 
+  gather(key = "Intention_A", value = "Total")
+
+sham_intention_B <- sh_py %>% dplyr::summarise(NoChange = sum(Intention_1change_b==0), More = sum(Intention_More_b==0), 
+                          Less = sum(Intention_Less_b==0), Dispose = sum(Intention_Dispose_b==0), 
+                          Change = sum(Intention_Change_b==0), Friend = sum(Intention_Friend_b==0),
+                          Naloxone = sum(Intention_Naloxone_b==0), Other = sum(Intention_Other_b==0)) %>% 
+  gather(key = "Intention_B", value = "Total")
+
+sham_intention_C <- sh_py %>% dplyr::summarise(NoChange = sum(Intention_1change_c==0), More = sum(Intention_More_c==0), 
+                          Less = sum(Intention_Less_c==0), Dispose = sum(Intention_Dispose_c==0), 
+                          Change = sum(Intention_Change_c==0), Friend = sum(Intention_Friend_c==0),
+                          Naloxone = sum(Intention_Naloxone_c==0), Other = sum(Intention_Other_c==0)) %>% 
+  gather(key = "Intention_C", value = "Total")
+
+
+All_intentions<-cbind(sham_intention_A,sham_intention_B,sham_intention_C)
+All_intentions<-All_intentions[,-c(3,5)] #duplicate factors
+
+All_intentions<-sqldf("select Intention_A as Intentions, (Total+`Total.1`+`Total.2`) as count from All_intentions")
+
+ggplot(All_intentions, aes(x = factor(Intentions), y = count/sum(count), fill = Intentions)) + geom_bar(stat = "identity")+theme(axis.text.x = element_text(angle = 90, hjust = 0.9))+ggtitle("Intentions")+ylab("Rate")+xlab("Behaviour")
+
+All_intentions<-All_intentions[,-c(3,5)] #duplicate factors
+write.csv(All_intentions,"all_intention.csv")
+
+```
+
+
+
+Do work on the "other" and "detail" column: categorize the frequency of words occurring
+
+
+With expectation vs. actual - remove ground scores to see what happens to it
+
+```{r}
+
+ground_substance<-cbind(all_obtained_all,all_belief_ftir1)
+
+ground_find<-sqldf("select * from ground_substance where Obtained=='Ground'")
+
+sham_substance_belf_ground <- ground_find %>% dplyr::summarise(belf_MDMA = sum(belief=="['MDMA']"), belf_MDA = sum(belief=="['MDA']"), 
+                          belf_Ketamine = sum(belief=="['Ketamine']"), belf_Cocaine = sum(belief=="['Cocaine']"), 
+                          belf_Meth = sum(belief=="['Methamphetamine']"), belf_LSD = sum(belief=="['LSD']"),
+                          belf_Unknown = sum(belief=="['Unknown']"), belf_Other = sum(belief=="['Other']")) %>% 
+  gather(key = "Substance_belief_ground", value = "Total")
+
+
+sham_substance_tested_ground <- ground_find %>% dplyr::summarise(ftir1_MDMA = sum(FTIR_1=="['MDMA']"), ftir1_MDA = sum(FTIR_1=="['MDA']"), 
+                          ftir1_Ketamine = sum(FTIR_1=="['Ketamine']"), ftir1_Cocaine = sum(FTIR_1=="['Cocaine']"), 
+                          ftir1_Meth = sum(FTIR_1=="['Methamphetamine']"), ftir1_LSD = sum(FTIR_1=="['LSD']"),
+                          ftir1_Unknown = sum(FTIR_1=="['Unknown']"), ftir1_Other = sum(FTIR_1=="['Other']")) %>% 
+  gather(key = "Substance_Tested_ground", value = "Total")
+
+
+ggplot(sham_substance_belf_ground, aes(x = factor(Substance_belief_ground), y = Total/sum(Total), fill = Substance_belief_ground)) + geom_bar(stat = "identity")+xlab("Class")+ggtitle("Sample Tested ground find")+theme(axis.text.x = element_text(angle = 90, hjust =0))+ylab("Rate")+xlab("Substances")
+
+ggplot(sham_substance_tested_ground, aes(x = factor(Substance_Tested_ground), y = Total/sum(Total), fill = Substance_Tested_ground)) + geom_bar(stat = "identity")+xlab("Class")+ggtitle("Sample Tested ground find")+theme(axis.text.x = element_text(angle = 90, hjust =0))+ylab("Rate")+xlab("Substances")
+
+sqldf("select belief, FTIR_1 from ground_find where belief LIKE '%Unknown%' group by FTIR_1") #if belief is unknown, what did Primary FTIR identify 
+
+```
+    
+    
+
+```{r}
+#COMBINING Multiple Samples Belief,FTIR with the original grouped df
+
+newdf<-sqldf("Select * from df group by UniqueCode")
+#which(colnames(groupded_beliefs_ftir)=="FTIR_substances")
+groupded_beliefs_ftir<-cbind(beliefs_name,ftir_num)
+groupded_beliefs_ftir<-groupded_beliefs_ftir[,-c(1,2,3,4,5,6,7,9,11,12,13,14,15,16,17,19)] 
+
+newdf2<-cbind(newdf,groupded_beliefs_ftir)
+
+#COMMENT ME OUT!
+write.csv(newdf2,"Shambhala19_Combined.csv")
+```
+
+
+
